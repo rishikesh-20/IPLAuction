@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-white font-sans;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-slate-800; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded; }
+}
+
+@layer components {
+  .card { @apply bg-slate-800 border border-slate-700 rounded-xl; }
+  .badge-role-batsman  { @apply bg-blue-500/20 text-blue-300 border border-blue-500/30; }
+  .badge-role-bowler   { @apply bg-red-500/20 text-red-300 border border-red-500/30; }
+  .badge-role-all-rounder { @apply bg-purple-500/20 text-purple-300 border border-purple-500/30; }
+  .badge-role-wicket-keeper { @apply bg-yellow-500/20 text-yellow-300 border border-yellow-500/30; }
+  .badge-marquee  { @apply bg-amber-500/20 text-amber-300 border border-amber-500/30; }
+  .badge-capped   { @apply bg-slate-500/20 text-slate-300 border border-slate-500/30; }
+  .badge-uncapped { @apply bg-green-500/20 text-green-300 border border-green-500/30; }
+}
