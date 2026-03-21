@@ -33,6 +33,7 @@ export default function AuctionLayout() {
   const { auctionOrder, totalPlayers, soldPlayers, unsoldPlayers } = useAuction();
   const { myTeam } = useTeams();
   const [showPlayers, setShowPlayers] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
 
   const ownerName = myTeam?.ownerName || sessionStorage.getItem('ownerName') || '';
   const teamName = myTeam?.teamName || (isAuctioneer ? 'Auctioneer' : '');
@@ -81,6 +82,16 @@ export default function AuctionLayout() {
             </div>
           )}
           <button
+            onClick={() => setShowQueue((v) => !v)}
+            className={`text-xs border px-3 py-1.5 rounded-lg transition-colors ${
+              showQueue
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                : 'bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-300'
+            }`}
+          >
+            🗂 Queue
+          </button>
+          <button
             onClick={() => setShowPlayers(true)}
             className="text-xs bg-slate-700 hover:bg-slate-600 border border-slate-600 px-3 py-1.5 rounded-lg text-slate-300 transition-colors"
           >
@@ -96,17 +107,32 @@ export default function AuctionLayout() {
         </ModalErrorBoundary>
       )}
 
-      {/* 3-column body */}
-      <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: '22% 52% 26%' }}>
-        <div className="overflow-y-auto p-3 border-r border-slate-800">
+      {/* 2-column body */}
+      <div className="flex-1 flex min-h-0 relative overflow-hidden">
+        <div className="w-[22%] shrink-0 overflow-y-auto p-3 border-r border-slate-800">
           <LeftPanel />
         </div>
-        <div className="overflow-y-auto p-4 border-r border-slate-800">
+        <div className="flex-1 overflow-y-auto p-4">
           <CenterPanel />
         </div>
-        <div className="overflow-y-auto p-3">
-          <RightPanel />
+
+        {/* Sliding Queue Sidebar */}
+        <div className={`absolute top-0 right-0 h-full w-72 bg-slate-900 border-l border-slate-700 overflow-y-auto transition-transform duration-300 ease-in-out z-30 ${
+          showQueue ? 'translate-x-0' : 'translate-x-full'
+        }`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 sticky top-0 bg-slate-900">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Player Queue</h2>
+            <button onClick={() => setShowQueue(false)} className="text-slate-500 hover:text-white text-lg leading-none transition-colors">✕</button>
+          </div>
+          <div className="p-3">
+            <RightPanel />
+          </div>
         </div>
+
+        {/* Backdrop when queue open */}
+        {showQueue && (
+          <div className="absolute inset-0 z-20 bg-black/30" onClick={() => setShowQueue(false)} />
+        )}
       </div>
     </div>
   );
