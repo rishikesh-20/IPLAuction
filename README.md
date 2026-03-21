@@ -86,6 +86,4 @@ Perfect for a group of cricket-obsessed friends who've always wanted to run thei
 
 ## 🔗 Play Now
 
-👉 **[Your Render URL here]**
-
 Just share the link with your group, pick teams, and start bidding. No account needed — just a name and your competitive spirit. Good luck! 🏏
