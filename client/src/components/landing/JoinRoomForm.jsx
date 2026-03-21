@@ -139,7 +139,7 @@ export default function JoinRoomForm() {
               onChange={(e) => setOwnerName(e.target.value)}
               required
               className={inputCls}
-              placeholder="Rishi"
+              placeholder=""
             />
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}

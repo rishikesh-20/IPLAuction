@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const Room = require('../models/Room');
-const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction } = require('../services/auctionService');
+const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction, emergencyRelease } = require('../services/auctionService');
 const timerManager = require('./timerManager');
 
 function verifyToken(rawToken, hashedToken) {
@@ -106,6 +106,15 @@ module.exports = function registerAuctionHandlers(io, socket) {
       io.to(room.roomCode).emit('auction-resumed', { message: 'Auction resumed' });
     } catch (err) {
       console.error('resume-auction error:', err);
+      socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
+    }
+  });
+
+  socket.on('emergency-release', async ({ roomCode, teamId, playerId }) => {
+    try {
+      await emergencyRelease(io, socket, { roomCode: roomCode?.toUpperCase(), teamId, playerId });
+    } catch (err) {
+      console.error('emergency-release error:', err);
       socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
     }
   });

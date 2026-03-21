@@ -74,7 +74,7 @@ export default function CreateRoomForm() {
       <div>
         <label className={labelCls}>Your Name (Auctioneer)</label>
         <input name="auctioneerName" value={form.auctioneerName} onChange={handleChange} required
-          className={inputCls} placeholder="Rishi" />
+          className={inputCls} placeholder="" />
       </div>
       <div>
         <label className={labelCls}>Select Your Team <span className="text-slate-500">(lets you bid too)</span></label>

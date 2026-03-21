@@ -6,6 +6,7 @@ import AuctionLayout from '../components/auction/layout/AuctionLayout';
 import ToastContainer from '../components/common/Toast';
 import Spinner from '../components/common/Spinner';
 import { useAuction } from '../context/AuctionContext';
+import EmergencyFundButton from '../components/auction/EmergencyFundButton';
 
 export default function AuctionPage() {
   const { roomCode } = useParams();
@@ -92,6 +93,7 @@ export default function AuctionPage() {
     <>
       <AuctionLayout />
       <ToastContainer />
+      {auctionPhase !== 'completed' && <EmergencyFundButton />}
     </>
   );
 }

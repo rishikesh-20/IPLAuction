@@ -125,6 +125,16 @@ export function AuctionProvider({ children }) {
     const onAuctionNotice = ({ message }) => addToast(message, 'info');
     const onTeamUpdated = ({ teamId, coOwnerName }) => updateTeam(teamId, { coOwnerName });
 
+    const onEmergencyRelease = ({ teamId, playerId, refundAmount, updatedTeam, playerQueue }) => {
+      updateTeam(teamId, updatedTeam);
+      setSoldPlayers((prev) => prev.filter((sp) => sp.player._id !== playerId));
+      if (playerQueue) setPlayerQueue(playerQueue);
+      const myTeamId = sessionStorage.getItem('teamId');
+      if (String(teamId) === myTeamId) {
+        addToast(`Emergency Fund used. ₹${refundAmount}L refunded.`, 'success');
+      }
+    };
+
     socket.on('room-state', onRoomState);
     socket.on('team-joined', onTeamJoined);
     socket.on('team-disconnected', ({ teamId }) => onTeamConnChange({ teamId, isConnected: false }));
@@ -142,6 +152,7 @@ export function AuctionProvider({ children }) {
     socket.on('auction-resumed', onAuctionResumed);
     socket.on('auction-notice', onAuctionNotice);
     socket.on('team-updated', onTeamUpdated);
+    socket.on('emergency-release', onEmergencyRelease);
 
     return () => {
       socket.off('room-state', onRoomState);
@@ -161,6 +172,7 @@ export function AuctionProvider({ children }) {
       socket.off('auction-resumed', onAuctionResumed);
       socket.off('auction-notice', onAuctionNotice);
     socket.off('team-updated', onTeamUpdated);
+    socket.off('emergency-release', onEmergencyRelease);
     };
   }, []);
 
@@ -199,6 +211,12 @@ export function AuctionProvider({ children }) {
     socket.emit('end-auction', { roomCode: room.roomCode, auctioneerToken });
   }, [room, auctioneerToken]);
 
+  const emitEmergencyRelease = useCallback((playerId) => {
+    if (!room) return;
+    const teamId = sessionStorage.getItem('teamId');
+    socket.emit('emergency-release', { roomCode: room.roomCode, teamId, playerId });
+  }, [room]);
+
   return (
     <AuctionContext.Provider value={{
       currentPlayer, currentBid, bidHistory, timer,
@@ -206,7 +224,7 @@ export function AuctionProvider({ children }) {
       auctionOrder, totalPlayers, finalStandings,
       auctionPhase, lastSoldInfo, lastUnsoldInfo,
       toasts, addToast, removeToast,
-      emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume, emitEndAuction,
+      emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume, emitEndAuction, emitEmergencyRelease,
     }}>
       {children}
     </AuctionContext.Provider>

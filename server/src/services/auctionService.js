@@ -39,6 +39,7 @@ async function populateTeamSnapshots(roomId) {
     overseasCount: t.overseasCount,
     isConnected: t.isConnected,
     isEliminated: t.isEliminated,
+    emergencyUsed: t.emergencyUsed,
     coOwnerName: t.coOwnerName || null,
   }));
 }
@@ -340,6 +341,96 @@ async function markUnsold(io, room) {
   await finalizeUnsold(io, room);
 }
 
+async function emergencyRelease(io, socket, { roomCode, teamId, playerId }) {
+  const mutex = getMutex(roomCode);
+  const release = await mutex.acquire();
+  try {
+    const room = await Room.findOne({ roomCode });
+    if (!room || room.status !== 'active') {
+      socket.emit('emergency-release-rejected', { reason: 'AUCTION_NOT_ACTIVE', message: 'Auction is not active' });
+      return;
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team || !team.roomId.equals(room._id)) {
+      socket.emit('emergency-release-rejected', { reason: 'TEAM_NOT_FOUND', message: 'Team not found in this room' });
+      return;
+    }
+
+    if (team.emergencyUsed) {
+      socket.emit('emergency-release-rejected', { reason: 'ALREADY_USED', message: 'Emergency Fund has already been used' });
+      return;
+    }
+
+    if (team.squad.length === 0) {
+      socket.emit('emergency-release-rejected', { reason: 'EMPTY_SQUAD', message: 'Squad is empty' });
+      return;
+    }
+
+    const squadEntry = team.squad.find((e) => e.playerId.equals(playerId));
+    if (!squadEntry) {
+      socket.emit('emergency-release-rejected', { reason: 'PLAYER_NOT_IN_SQUAD', message: 'Player not found in squad' });
+      return;
+    }
+
+    const { soldPrice } = squadEntry;
+
+    // Fetch player to check nationality
+    const player = await Player.findById(playerId);
+
+    // Update team
+    team.squad = team.squad.filter((e) => !e.playerId.equals(playerId));
+    if (player && player.nationality === 'Overseas') team.overseasCount = Math.max(0, team.overseasCount - 1);
+    team.budget.spent -= soldPrice;
+    team.emergencyUsed = true;
+    await team.save();
+
+    // Update room: remove from soldPlayerIds, push to end of playerPool
+    room.soldPlayerIds = room.soldPlayerIds.filter((id) => !id.equals(playerId));
+    room.playerPool.push(playerId);
+    await room.save();
+
+    // Build updated team snapshot
+    const populatedTeam = await Team.findById(team._id).populate('squad.playerId');
+    const updatedTeam = {
+      _id: populatedTeam._id,
+      teamName: populatedTeam.teamName,
+      ownerName: populatedTeam.ownerName,
+      color: populatedTeam.color,
+      budget: populatedTeam.budget,
+      squad: populatedTeam.squad,
+      overseasCount: populatedTeam.overseasCount,
+      isConnected: populatedTeam.isConnected,
+      isEliminated: populatedTeam.isEliminated,
+      emergencyUsed: populatedTeam.emergencyUsed,
+      coOwnerName: populatedTeam.coOwnerName || null,
+    };
+
+    // Build updated queue preview (next 5 after current index)
+    const queuePlayers = [];
+    let lookahead = room.currentPlayerIndex + 1;
+    while (queuePlayers.length < 5 && lookahead < room.playerPool.length) {
+      const pid = room.playerPool[lookahead];
+      const alreadyDone = room.soldPlayerIds.some((id) => id.equals(pid)) || room.unsoldPlayerIds.some((id) => id.equals(pid));
+      if (!alreadyDone) {
+        const p = await Player.findById(pid).select('name role nationality basePrice category');
+        if (p) queuePlayers.push(p);
+      }
+      lookahead++;
+    }
+
+    io.to(roomCode).emit('emergency-release', {
+      teamId: team._id,
+      playerId,
+      refundAmount: soldPrice,
+      updatedTeam,
+      playerQueue: queuePlayers,
+    });
+  } finally {
+    release();
+  }
+}
+
 module.exports = {
   verifyAuctioneerToken,
   getAuctionState,
@@ -350,5 +441,6 @@ module.exports = {
   finalizeUnsold,
   markUnsold,
   endAuction,
+  emergencyRelease,
   populateTeamSnapshots,
 };
