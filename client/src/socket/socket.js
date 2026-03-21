@@ -1,6 +1,10 @@
 import { io } from 'socket.io-client';
 
-const socket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:5000', {
+const SERVER_URL = import.meta.env.PROD
+  ? window.location.origin
+  : (import.meta.env.VITE_SERVER_URL || 'http://localhost:5001');
+
+const socket = io(SERVER_URL, {
   autoConnect: false,
   reconnection: true,
   reconnectionAttempts: 5,
