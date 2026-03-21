@@ -118,6 +118,7 @@ export function AuctionProvider({ children }) {
 
     const onAuctionPaused = () => updateRoomStatus('paused');
     const onAuctionResumed = () => updateRoomStatus('active');
+    const onAuctionNotice = ({ message }) => addToast(message, 'info');
 
     socket.on('room-state', onRoomState);
     socket.on('team-joined', onTeamJoined);
@@ -134,6 +135,7 @@ export function AuctionProvider({ children }) {
     socket.on('auction-completed', onAuctionCompleted);
     socket.on('auction-paused', onAuctionPaused);
     socket.on('auction-resumed', onAuctionResumed);
+    socket.on('auction-notice', onAuctionNotice);
 
     return () => {
       socket.off('room-state', onRoomState);
@@ -151,6 +153,7 @@ export function AuctionProvider({ children }) {
       socket.off('auction-completed', onAuctionCompleted);
       socket.off('auction-paused', onAuctionPaused);
       socket.off('auction-resumed', onAuctionResumed);
+      socket.off('auction-notice', onAuctionNotice);
     };
   }, []);
 
@@ -184,6 +187,11 @@ export function AuctionProvider({ children }) {
     socket.emit('resume-auction', { roomCode: room.roomCode, auctioneerToken });
   }, [room, auctioneerToken]);
 
+  const emitEndAuction = useCallback(() => {
+    if (!room || !auctioneerToken) return;
+    socket.emit('end-auction', { roomCode: room.roomCode, auctioneerToken });
+  }, [room, auctioneerToken]);
+
   return (
     <AuctionContext.Provider value={{
       currentPlayer, currentBid, bidHistory, timer,
@@ -191,7 +199,7 @@ export function AuctionProvider({ children }) {
       auctionOrder, totalPlayers, finalStandings,
       auctionPhase, lastSoldInfo, lastUnsoldInfo,
       toasts, addToast, removeToast,
-      emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume,
+      emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume, emitEndAuction,
     }}>
       {children}
     </AuctionContext.Provider>

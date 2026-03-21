@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const Room = require('../models/Room');
-const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer } = require('../services/auctionService');
+const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction } = require('../services/auctionService');
 const timerManager = require('./timerManager');
 
 function verifyToken(rawToken, hashedToken) {
@@ -60,6 +60,20 @@ module.exports = function registerAuctionHandlers(io, socket) {
       await markUnsold(io, room);
     } catch (err) {
       console.error('mark-unsold error:', err);
+      socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
+    }
+  });
+
+  socket.on('end-auction', async ({ roomCode, auctioneerToken }) => {
+    try {
+      const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
+      if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
+      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (room.status === 'completed') return socket.emit('error', { code: 'ALREADY_COMPLETED', message: 'Auction already completed' });
+
+      await endAuction(io, room);
+    } catch (err) {
+      console.error('end-auction error:', err);
       socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
     }
   });

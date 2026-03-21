@@ -63,25 +63,39 @@ async function startAuction(io, room) {
   await advanceToNextPlayer(io, room);
 }
 
+async function endAuction(io, room) {
+  timerManager.destroyTimer(room.roomCode);
+  auctionStates.delete(room.roomCode);
+  mutexes.delete(room.roomCode);
+  room.status = 'completed';
+  await room.save();
+  const teams = await populateTeamSnapshots(room._id);
+  const unsoldPlayers = await Player.find({ _id: { $in: room.unsoldPlayerIds } });
+  io.to(room.roomCode).emit('auction-completed', {
+    finalStandings: teams,
+    unsoldPlayers,
+    totalAuctioned: room.soldPlayerIds.length,
+    totalUnsold: room.unsoldPlayerIds.length,
+  });
+}
+
 async function advanceToNextPlayer(io, room) {
   const player = await loadNextPlayer(room);
 
   if (!player) {
-    // Auction complete
-    await room.save();
-    const teams = await populateTeamSnapshots(room._id);
-    const unsoldPlayers = await Player.find({ _id: { $in: room.unsoldPlayerIds } });
-    room.status = 'completed';
-    await room.save();
-    timerManager.destroyTimer(room.roomCode);
-    auctionStates.delete(room.roomCode);
-    mutexes.delete(room.roomCode);
-    io.to(room.roomCode).emit('auction-completed', {
-      finalStandings: teams,
-      unsoldPlayers,
-      totalAuctioned: room.soldPlayerIds.length,
-      totalUnsold: room.unsoldPlayerIds.length,
+    // All players exhausted — end auction
+    await endAuction(io, room);
+    return;
+  }
+
+  // Auto-end if ALL teams have less than 30L remaining
+  const allTeams = await Team.find({ roomId: room._id });
+  const allInsufficientFunds = allTeams.length > 0 && allTeams.every(t => t.budget.remaining < 30);
+  if (allInsufficientFunds) {
+    io.to(room.roomCode).emit('auction-notice', {
+      message: 'All teams have insufficient funds (< ₹30L). Auction ending automatically.',
     });
+    await endAuction(io, room);
     return;
   }
 
@@ -334,5 +348,6 @@ module.exports = {
   finalizeSale,
   finalizeUnsold,
   markUnsold,
+  endAuction,
   populateTeamSnapshots,
 };
