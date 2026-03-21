@@ -5,6 +5,7 @@ import RightPanel from './RightPanel';
 import PlayersModal from '../../common/PlayersModal';
 import { useRoom } from '../../../context/RoomContext';
 import { useAuction } from '../../../context/AuctionContext';
+import { useTeams } from '../../../context/TeamContext';
 
 class ModalErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
@@ -28,9 +29,13 @@ class ModalErrorBoundary extends Component {
 }
 
 export default function AuctionLayout() {
-  const { room } = useRoom();
+  const { room, isAuctioneer } = useRoom();
   const { auctionOrder, totalPlayers, soldPlayers, unsoldPlayers } = useAuction();
+  const { myTeam } = useTeams();
   const [showPlayers, setShowPlayers] = useState(false);
+
+  const ownerName = myTeam?.ownerName || sessionStorage.getItem('ownerName') || '';
+  const teamName = myTeam?.teamName || (isAuctioneer ? 'Auctioneer' : '');
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 overflow-hidden">
@@ -61,6 +66,20 @@ export default function AuctionLayout() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Your identity badge */}
+          {(ownerName || teamName) && (
+            <div className="flex items-center gap-1.5 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1">
+              {myTeam?.color && (
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: myTeam.color }} />
+              )}
+              <div className="text-xs leading-tight">
+                <span className="text-white font-semibold">{ownerName}</span>
+                {teamName && (
+                  <span className="text-slate-400"> · {teamName}</span>
+                )}
+              </div>
+            </div>
+          )}
           <button
             onClick={() => setShowPlayers(true)}
             className="text-xs bg-slate-700 hover:bg-slate-600 border border-slate-600 px-3 py-1.5 rounded-lg text-slate-300 transition-colors"
