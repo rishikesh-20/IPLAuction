@@ -66,19 +66,20 @@ export default function BidButton() {
 
   return (
     <div className="space-y-2">
-      {/* Quick-bid chips */}
+      {/* Quick-bid chips — clicking places the bid immediately */}
       {!disabledReason && (
         <div className="flex gap-2">
           {quickAmounts.map((amt) => (
             <button
               key={amt}
-              onClick={() => setInputText(String(amt))}
-              style={parsedAmount === amt && teamHex ? { backgroundColor: teamHex, borderColor: teamHex } : undefined}
-              className={`flex-1 text-xs py-1.5 rounded-lg border transition-all ${
-                parsedAmount === amt
-                  ? 'text-white font-bold'
-                  : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-400'
-              }`}
+              onClick={() => {
+                if ((myTeam?.budget?.remaining ?? 0) >= amt) {
+                  emitPlaceBid(myTeam._id, amt);
+                }
+              }}
+              disabled={(myTeam?.budget?.remaining ?? 0) < amt}
+              style={teamHex ? { backgroundColor: teamHex, borderColor: teamHex } : undefined}
+              className="flex-1 text-xs py-1.5 rounded-lg border text-white font-bold transition-all hover:opacity-90 active:opacity-70 disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {formatLakhs(amt)}
             </button>

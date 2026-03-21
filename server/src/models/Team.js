@@ -20,6 +20,7 @@ const teamSchema = new mongoose.Schema({
   isConnected:     { type: Boolean, default: true },
   isEliminated:    { type: Boolean, default: false },
   emergencyUsed:   { type: Boolean, default: false },
+  rtmRemaining:    { type: Number,  default: 3 },
   coOwnerName:     { type: String, default: null },
   coOwnerSocketId: { type: String, default: null },
 }, { timestamps: true });

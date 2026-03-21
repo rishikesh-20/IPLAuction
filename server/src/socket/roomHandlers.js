@@ -3,7 +3,7 @@ const Room = require('../models/Room');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
 const AuctionHistory = require('../models/AuctionHistory');
-const { getAuctionState, populateTeamSnapshots } = require('../services/auctionService');
+const { getAuctionState, getRTMState, populateTeamSnapshots } = require('../services/auctionService');
 
 const TEAM_COLORS = [
   '#3b82f6','#ef4444','#f59e0b','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316',
@@ -51,6 +51,20 @@ async function buildRoomState(room, socket, myTeamId) {
     unsoldPlayers,
     auctionHistory: recentHistory,
     yourTeamId: myTeamId,
+    rtmState: (() => {
+      const rtm = getRTMState(room.roomCode);
+      if (!rtm) return null;
+      return {
+        phase: rtm.phase,
+        player: rtm.player,
+        soldPrice: rtm.soldPrice,
+        soldTo: { teamId: rtm.originalWinnerId, teamName: rtm.originalWinnerName },
+        eligibleTeamIds: rtm.eligibleTeamIds.map(String),
+        interestedTeamIds: rtm.interestedTeamIds.map(String),
+        secondsRemaining: rtm.secondsRemaining,
+        currentBid: rtm.currentBid,
+      };
+    })(),
   };
 }
 

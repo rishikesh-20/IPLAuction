@@ -25,6 +25,12 @@ const TIMER_DEFAULTS = {
   postSaleDelay: 3000,   // ms before advancing to next player
 };
 
+const RTM_DEFAULTS = {
+  windowDuration: 10,       // seconds for interest-declaration window
+  biddingRoundDuration: 10, // seconds per round during RTM bidding war
+  postRtmDelay: 3000,       // ms before advancing after RTM concludes
+};
+
 const ROOM_DEFAULTS = {
   startingBudget: 9000,   // lakhs (= 90 Cr)
   maxSquadSize: 25,
@@ -33,4 +39,31 @@ const ROOM_DEFAULTS = {
   maxTeams: 10,
 };
 
-module.exports = { BID_TIERS, getBidIncrement, getNextBidAmount, TIMER_DEFAULTS, ROOM_DEFAULTS };
+// Maps full IPL franchise name (stored as teamName in DB) → abbreviation used in iplTeamHistory seed data
+const IPL_TEAM_ABBR = {
+  'Mumbai Indians':              'MI',
+  'Chennai Super Kings':         'CSK',
+  'Royal Challengers Bangalore': 'RCB',
+  'Kolkata Knight Riders':       'KKR',
+  'Delhi Capitals':              'DC',
+  'Sunrisers Hyderabad':         'SRH',
+  'Rajasthan Royals':            'RR',
+  'Punjab Kings':                'PBKS',
+  'Gujarat Titans':              'GT',
+  'Lucknow Super Giants':        'LSG',
+};
+
+// Expand pipe-separated iplTeamHistory entries into a flat array of abbreviations
+// e.g. ['MI|KKR', 'RCB'] → ['MI', 'KKR', 'RCB']
+function expandTeamHistory(iplTeamHistory) {
+  const result = [];
+  for (const entry of (iplTeamHistory || [])) {
+    for (const abbr of entry.split('|')) {
+      const trimmed = abbr.trim();
+      if (trimmed) result.push(trimmed);
+    }
+  }
+  return result;
+}
+
+module.exports = { BID_TIERS, getBidIncrement, getNextBidAmount, TIMER_DEFAULTS, RTM_DEFAULTS, ROOM_DEFAULTS, IPL_TEAM_ABBR, expandTeamHistory };

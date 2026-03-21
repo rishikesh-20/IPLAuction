@@ -25,6 +25,9 @@ export function AuctionProvider({ children }) {
   const [auctionPhase, setAuctionPhase] = useState('idle'); // idle | bidding | sold | unsold | completed
   const [lastSoldInfo, setLastSoldInfo] = useState(null);
   const [lastUnsoldInfo, setLastUnsoldInfo] = useState(null);
+  // RTM state
+  const [rtmPhase, setRtmPhase] = useState(null); // null | 'window' | 'bidding' | 'ended'
+  const [rtmInfo, setRtmInfo] = useState(null);
 
   const toastIdRef = useRef(0);
 
@@ -52,6 +55,21 @@ export function AuctionProvider({ children }) {
       if (state.room?.status) updateRoomStatus(state.room.status);
       // soldPlayers from server are IDs only — restore the authoritative count
       if (Array.isArray(state.soldPlayers)) setSoldCount(state.soldPlayers.length);
+      // Restore RTM state on reconnect
+      if (state.rtmState) {
+        setRtmPhase(state.rtmState.phase);
+        setRtmInfo({
+          player: state.rtmState.player,
+          soldPrice: state.rtmState.soldPrice,
+          soldTo: state.rtmState.soldTo,
+          eligibleTeamIds: state.rtmState.eligibleTeamIds || [],
+          interestedTeamIds: state.rtmState.interestedTeamIds || [],
+          windowSecondsRemaining: state.rtmState.phase === 'window' ? state.rtmState.secondsRemaining : null,
+          biddingSecondsRemaining: state.rtmState.phase === 'bidding' ? state.rtmState.secondsRemaining : null,
+          currentRtmBid: state.rtmState.currentBid,
+          interestedTeams: [],
+        });
+      }
     };
 
     const onTeamJoined = ({ team }) => addTeam(team);
@@ -125,6 +143,77 @@ export function AuctionProvider({ children }) {
     const onAuctionNotice = ({ message }) => addToast(message, 'info');
     const onTeamUpdated = ({ teamId, coOwnerName }) => updateTeam(teamId, { coOwnerName });
 
+    // RTM listeners
+    const onRtmAvailable = ({ player, soldPrice, soldTo, eligibleTeamIds, windowDuration }) => {
+      setRtmPhase('window');
+      setRtmInfo({
+        player,
+        soldPrice,
+        soldTo,
+        eligibleTeamIds: eligibleTeamIds || [],
+        interestedTeamIds: [],
+        interestedTeams: [],
+        windowSecondsRemaining: windowDuration,
+        biddingSecondsRemaining: null,
+        currentRtmBid: null,
+        nextRtmBidAmount: soldPrice,
+      });
+    };
+
+    const onRtmWindowTick = ({ secondsRemaining }) => {
+      setRtmInfo((prev) => prev ? { ...prev, windowSecondsRemaining: secondsRemaining } : prev);
+    };
+
+    const onRtmUpdate = ({ interestedTeamIds, interestedTeam }) => {
+      setRtmInfo((prev) => {
+        if (!prev) return prev;
+        const newTeams = prev.interestedTeams.some((t) => t.teamId?.toString() === interestedTeam?.teamId?.toString())
+          ? prev.interestedTeams
+          : [...prev.interestedTeams, interestedTeam];
+        return { ...prev, interestedTeamIds: interestedTeamIds || prev.interestedTeamIds, interestedTeams: newTeams };
+      });
+    };
+
+    const onRtmBiddingStarted = ({ interestedTeamIds, interestedTeams, baseBid, biddingDuration }) => {
+      setRtmPhase('bidding');
+      setRtmInfo((prev) => prev ? {
+        ...prev,
+        interestedTeamIds: interestedTeamIds || prev.interestedTeamIds,
+        interestedTeams: interestedTeams || prev.interestedTeams,
+        currentRtmBid: null,
+        nextRtmBidAmount: baseBid,
+        biddingSecondsRemaining: biddingDuration,
+      } : prev);
+    };
+
+    const onRtmBidTick = ({ secondsRemaining }) => {
+      setRtmInfo((prev) => prev ? { ...prev, biddingSecondsRemaining: secondsRemaining } : prev);
+    };
+
+    const onRtmBidUpdate = ({ teamId, teamName, amount, nextBidAmount, secondsRemaining }) => {
+      setRtmInfo((prev) => prev ? {
+        ...prev,
+        currentRtmBid: { amount, teamId, teamName },
+        nextRtmBidAmount: nextBidAmount,
+        biddingSecondsRemaining: secondsRemaining,
+      } : prev);
+    };
+
+    const onRtmEnd = ({ outcome, teams, ...rest }) => {
+      setRtmPhase('ended');
+      if (teams) setAllTeamsFromSold(teams);
+      setRtmInfo((prev) => prev ? { ...prev, outcome, ...rest } : prev);
+      // Clear RTM UI after showing the result
+      setTimeout(() => {
+        setRtmPhase(null);
+        setRtmInfo(null);
+      }, 3000);
+    };
+
+    const onRtmRejected = ({ message }) => {
+      addToast(message, 'error');
+    };
+
     const onEmergencyRelease = ({ teamId, playerId, refundAmount, updatedTeam, playerQueue }) => {
       updateTeam(teamId, updatedTeam);
       setSoldPlayers((prev) => prev.filter((sp) => sp.player._id !== playerId));
@@ -153,6 +242,14 @@ export function AuctionProvider({ children }) {
     socket.on('auction-notice', onAuctionNotice);
     socket.on('team-updated', onTeamUpdated);
     socket.on('emergency-release', onEmergencyRelease);
+    socket.on('rtm-available', onRtmAvailable);
+    socket.on('rtm-window-tick', onRtmWindowTick);
+    socket.on('rtm-update', onRtmUpdate);
+    socket.on('rtm-bidding-started', onRtmBiddingStarted);
+    socket.on('rtm-bid-tick', onRtmBidTick);
+    socket.on('rtm-bid-update', onRtmBidUpdate);
+    socket.on('rtm-end', onRtmEnd);
+    socket.on('rtm-rejected', onRtmRejected);
 
     return () => {
       socket.off('room-state', onRoomState);
@@ -173,6 +270,14 @@ export function AuctionProvider({ children }) {
       socket.off('auction-notice', onAuctionNotice);
     socket.off('team-updated', onTeamUpdated);
     socket.off('emergency-release', onEmergencyRelease);
+    socket.off('rtm-available', onRtmAvailable);
+    socket.off('rtm-window-tick', onRtmWindowTick);
+    socket.off('rtm-update', onRtmUpdate);
+    socket.off('rtm-bidding-started', onRtmBiddingStarted);
+    socket.off('rtm-bid-tick', onRtmBidTick);
+    socket.off('rtm-bid-update', onRtmBidUpdate);
+    socket.off('rtm-end', onRtmEnd);
+    socket.off('rtm-rejected', onRtmRejected);
     };
   }, []);
 
@@ -217,6 +322,18 @@ export function AuctionProvider({ children }) {
     socket.emit('emergency-release', { roomCode: room.roomCode, teamId, playerId });
   }, [room]);
 
+  const emitRtmInterest = useCallback(() => {
+    if (!room) return;
+    const teamId = sessionStorage.getItem('teamId');
+    socket.emit('rtm-interest', { roomCode: room.roomCode, teamId });
+  }, [room]);
+
+  const emitRtmBid = useCallback((amount) => {
+    if (!room) return;
+    const teamId = sessionStorage.getItem('teamId');
+    socket.emit('rtm-bid', { roomCode: room.roomCode, teamId, amount });
+  }, [room]);
+
   return (
     <AuctionContext.Provider value={{
       currentPlayer, currentBid, bidHistory, timer,
@@ -225,6 +342,7 @@ export function AuctionProvider({ children }) {
       auctionPhase, lastSoldInfo, lastUnsoldInfo,
       toasts, addToast, removeToast,
       emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume, emitEndAuction, emitEmergencyRelease,
+      rtmPhase, rtmInfo, emitRtmInterest, emitRtmBid,
     }}>
       {children}
     </AuctionContext.Provider>
