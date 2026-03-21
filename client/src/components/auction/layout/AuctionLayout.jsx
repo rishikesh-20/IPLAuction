@@ -30,7 +30,7 @@ class ModalErrorBoundary extends Component {
 
 export default function AuctionLayout() {
   const { room, isAuctioneer } = useRoom();
-  const { auctionOrder, totalPlayers, soldPlayers, unsoldPlayers } = useAuction();
+  const { auctionOrder, totalPlayers, soldCount, unsoldPlayers } = useAuction();
   const { myTeam } = useTeams();
   const [showPlayers, setShowPlayers] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -54,7 +54,7 @@ export default function AuctionLayout() {
           {auctionOrder > 0 && (
             <span>Player <span className="text-white font-bold">{auctionOrder}</span> / {totalPlayers}</span>
           )}
-          <span className="text-emerald-400 font-semibold">{soldPlayers.length} sold</span>
+          <span className="text-emerald-400 font-semibold">{soldCount} sold</span>
           <span className="text-red-400 font-semibold">{unsoldPlayers.length} unsold</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
             room?.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :

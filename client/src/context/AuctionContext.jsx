@@ -15,6 +15,7 @@ export function AuctionProvider({ children }) {
   const [timer, setTimer] = useState({ secondsRemaining: 0, totalDuration: 30, isExtended: false });
   const [playerQueue, setPlayerQueue] = useState([]);
   const [soldPlayers, setSoldPlayers] = useState([]);
+  const [soldCount, setSoldCount] = useState(0);
   const [unsoldPlayers, setUnsoldPlayers] = useState([]);
   const [auctionHistory, setAuctionHistory] = useState([]);
   const [auctionOrder, setAuctionOrder] = useState(0);
@@ -49,6 +50,8 @@ export function AuctionProvider({ children }) {
       if (state.unsoldPlayers) setUnsoldPlayers(state.unsoldPlayers);
       if (state.auctionHistory) setAuctionHistory(state.auctionHistory);
       if (state.room?.status) updateRoomStatus(state.room.status);
+      // soldPlayers from server are IDs only — restore the authoritative count
+      if (Array.isArray(state.soldPlayers)) setSoldCount(state.soldPlayers.length);
     };
 
     const onTeamJoined = ({ team }) => addTeam(team);
@@ -99,6 +102,7 @@ export function AuctionProvider({ children }) {
       setLastSoldInfo({ player, soldTo, soldPrice });
       setAllTeamsFromSold(teams);
       setSoldPlayers((prev) => [...prev, { player, soldTo, soldPrice }]);
+      setSoldCount((prev) => prev + 1);
       setAuctionHistory((prev) => [{ player, soldTo, soldPrice, outcome: 'sold', auctionOrder }, ...prev]);
     };
 
@@ -195,7 +199,7 @@ export function AuctionProvider({ children }) {
   return (
     <AuctionContext.Provider value={{
       currentPlayer, currentBid, bidHistory, timer,
-      playerQueue, soldPlayers, unsoldPlayers, auctionHistory,
+      playerQueue, soldPlayers, soldCount, unsoldPlayers, auctionHistory,
       auctionOrder, totalPlayers, finalStandings,
       auctionPhase, lastSoldInfo, lastUnsoldInfo,
       toasts, addToast, removeToast,
