@@ -51,7 +51,10 @@ export default function PlayersModal({ onClose }) {
   const soldMap = useMemo(() => {
     const map = {};
     soldPlayers.forEach(({ player, soldTo, soldPrice }) => {
-      if (player?._id) map[player._id.toString()] = { soldTo, soldPrice };
+      if (player?._id) map[player._id.toString()] = {
+        soldTo: soldTo?.teamName ?? soldTo, // normalize: server sends { teamId, teamName }
+        soldPrice,
+      };
     });
     return map;
   }, [soldPlayers]);
