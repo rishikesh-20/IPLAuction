@@ -19,6 +19,7 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showPlayers, setShowPlayers] = useState(false);
+  const [socketError, setSocketError] = useState('');
   const joinedRef = useRef(false);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function LobbyPage() {
     const teamColor = sessionStorage.getItem('teamColor');
     const ownerName = sessionStorage.getItem('ownerName');
     const teamId = sessionStorage.getItem('teamId');
+    const coOwner = sessionStorage.getItem('coOwner') === 'true';
 
     if (!storedCode || storedCode !== roomCode) {
       navigate('/');
@@ -49,6 +51,7 @@ export default function LobbyPage() {
         payload.ownerName = ownerName;
         if (teamId) payload.teamId = teamId;
         if (teamColor) payload.teamColor = teamColor;
+        if (coOwner) payload.coOwner = true;
       }
       socket.emit('join-room', payload);
     }
@@ -66,8 +69,12 @@ export default function LobbyPage() {
 
     const onError = (err) => {
       console.error('Socket error:', err);
-      if (err.code === 'ROOM_NOT_FOUND' || err.code === 'AUCTION_STARTED') {
+      if (err.code === 'ROOM_NOT_FOUND' || err.code === 'AUCTION_STARTED' || err.code === 'SESSION_EXPIRED') {
         navigate('/');
+      } else if (err.code === 'CO_OWNER_EXISTS') {
+        setSocketError('This team already has a co-owner. Please go back and choose a different team.');
+      } else {
+        setSocketError(err.message || 'A connection error occurred.');
       }
     };
 
@@ -143,6 +150,14 @@ export default function LobbyPage() {
                 <div className="text-slate-500 text-xs">{label}</div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Socket error banner */}
+        {socketError && (
+          <div className="mb-4 p-3 bg-red-900/40 border border-red-500/40 rounded-lg text-red-300 text-sm flex items-start gap-2">
+            <span>⚠️</span>
+            <span>{socketError}</span>
           </div>
         )}
 

@@ -11,7 +11,7 @@ export default function AuctionPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const { room, initRoom } = useRoom();
-  const { auctionPhase } = useAuction();
+  const { auctionPhase, addToast } = useAuction();
   const joinedRef = useRef(false);
 
   useEffect(() => {
@@ -22,6 +22,7 @@ export default function AuctionPage() {
     const teamColor = sessionStorage.getItem('teamColor');
     const ownerName = sessionStorage.getItem('ownerName');
     const teamId = sessionStorage.getItem('teamId');
+    const coOwner = sessionStorage.getItem('coOwner') === 'true';
 
     if (!storedCode || storedCode !== roomCode) {
       navigate('/');
@@ -42,6 +43,7 @@ export default function AuctionPage() {
         payload.ownerName = ownerName;
         if (teamId) payload.teamId = teamId;
         if (teamColor) payload.teamColor = teamColor;
+        if (coOwner) payload.coOwner = true;
       }
       socket.emit('join-room', payload);
     }
@@ -51,7 +53,21 @@ export default function AuctionPage() {
       if (state.yourTeamId) sessionStorage.setItem('teamId', state.yourTeamId);
     };
     const onAuctionCompleted = () => setTimeout(() => navigate(`/summary/${roomCode}`), 4000);
-    const onError = (err) => { if (err.code === 'ROOM_NOT_FOUND') navigate('/'); };
+    const ERROR_TOASTS = {
+      CO_OWNER_EXISTS: 'This team already has a co-owner',
+      TEAM_NOT_FOUND:  'Team not found in this room',
+      SERVER_ERROR:    'Server error — please try refreshing',
+      MISSING_FIELDS:  'Session data missing — please rejoin from home',
+    };
+    const onError = (err) => {
+      if (err.code === 'ROOM_NOT_FOUND' || err.code === 'SESSION_EXPIRED') {
+        navigate('/');
+      } else if (ERROR_TOASTS[err.code]) {
+        addToast(ERROR_TOASTS[err.code], 'error');
+      } else {
+        addToast(err.message || 'A connection error occurred', 'error');
+      }
+    };
 
     socket.on('room-state', onRoomState);
     socket.on('auction-completed', onAuctionCompleted);

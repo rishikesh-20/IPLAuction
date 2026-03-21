@@ -39,6 +39,7 @@ async function populateTeamSnapshots(roomId) {
     overseasCount: t.overseasCount,
     isConnected: t.isConnected,
     isEliminated: t.isEliminated,
+    coOwnerName: t.coOwnerName || null,
   }));
 }
 

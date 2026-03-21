@@ -123,6 +123,7 @@ export function AuctionProvider({ children }) {
     const onAuctionPaused = () => updateRoomStatus('paused');
     const onAuctionResumed = () => updateRoomStatus('active');
     const onAuctionNotice = ({ message }) => addToast(message, 'info');
+    const onTeamUpdated = ({ teamId, coOwnerName }) => updateTeam(teamId, { coOwnerName });
 
     socket.on('room-state', onRoomState);
     socket.on('team-joined', onTeamJoined);
@@ -140,6 +141,7 @@ export function AuctionProvider({ children }) {
     socket.on('auction-paused', onAuctionPaused);
     socket.on('auction-resumed', onAuctionResumed);
     socket.on('auction-notice', onAuctionNotice);
+    socket.on('team-updated', onTeamUpdated);
 
     return () => {
       socket.off('room-state', onRoomState);
@@ -158,6 +160,7 @@ export function AuctionProvider({ children }) {
       socket.off('auction-paused', onAuctionPaused);
       socket.off('auction-resumed', onAuctionResumed);
       socket.off('auction-notice', onAuctionNotice);
+    socket.off('team-updated', onTeamUpdated);
     };
   }, []);
 

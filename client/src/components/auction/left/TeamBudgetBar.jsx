@@ -27,7 +27,9 @@ export default function TeamBudgetBar({ team, isMyTeam, config }) {
             <div className={`w-1.5 h-1.5 rounded-full ml-auto shrink-0 ${team.isConnected ? 'bg-green-400' : 'bg-slate-600'}`} />
           </div>
           {team.ownerName && (
-            <div className="text-xs text-slate-400 truncate">{team.ownerName}</div>
+            <div className="text-xs text-slate-400 truncate">
+              {team.ownerName}{team.coOwnerName ? ` & ${team.coOwnerName}` : ''}
+            </div>
           )}
         </div>
       </div>

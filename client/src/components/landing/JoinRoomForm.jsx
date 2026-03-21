@@ -11,6 +11,7 @@ export default function JoinRoomForm() {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [takenTeams, setTakenTeams] = useState([]);
   const [roomFound, setRoomFound] = useState(false);
+  const [coOwnerMode, setCoOwnerMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
@@ -26,6 +27,7 @@ export default function JoinRoomForm() {
     setChecking(true);
     setRoomFound(false);
     setSelectedTeam(null);
+    setCoOwnerMode(false);
     try {
       const res = await getRoom(code);
       const room = res.data.data;
@@ -55,6 +57,10 @@ export default function JoinRoomForm() {
       alert('Please enter your name');
       return;
     }
+    if (coOwnerMode && !takenTeams.includes(selectedTeam.name)) {
+      alert('In co-owner mode you must select an existing (taken) team');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -70,6 +76,11 @@ export default function JoinRoomForm() {
       sessionStorage.setItem('teamName', selectedTeam.name);
       sessionStorage.setItem('teamColor', selectedTeam.hex);
       sessionStorage.setItem('ownerName', ownerName.trim());
+      if (coOwnerMode) {
+        sessionStorage.setItem('coOwner', 'true');
+      } else {
+        sessionStorage.removeItem('coOwner');
+      }
       navigate(`/lobby/${code}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Room not found');
@@ -103,7 +114,23 @@ export default function JoinRoomForm() {
         <form onSubmit={handleJoin} className="space-y-4">
           <div>
             <label className={labelCls}>Select Your Team</label>
-            <TeamSelector selectedTeam={selectedTeam} setSelectedTeam={setSelectedTeam} takenTeams={takenTeams} />
+            <TeamSelector
+              selectedTeam={selectedTeam}
+              setSelectedTeam={setSelectedTeam}
+              takenTeams={takenTeams}
+              coOwnerMode={coOwnerMode}
+            />
+            {takenTeams.length > 0 && (
+              <label className="flex items-center gap-2 mt-2 text-sm text-slate-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={coOwnerMode}
+                  onChange={(e) => { setCoOwnerMode(e.target.checked); setSelectedTeam(null); }}
+                  className="accent-teal-400"
+                />
+                Join as co-owner of an existing team
+              </label>
+            )}
           </div>
           <div>
             <label className={labelCls}>Your Name</label>

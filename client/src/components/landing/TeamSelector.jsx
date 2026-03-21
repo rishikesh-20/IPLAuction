@@ -18,25 +18,30 @@ export function getTeamHex(teamName) {
   return IPL_TEAMS.find((t) => t.name === teamName)?.hex ?? '#f59e0b';
 }
 
-export default function TeamSelector({ selectedTeam, setSelectedTeam, takenTeams = [] }) {
+export default function TeamSelector({ selectedTeam, setSelectedTeam, takenTeams = [], coOwnerMode = false }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
       {IPL_TEAMS.map((team) => {
         const isTaken = takenTeams.includes(team.name);
         const isSelected = selectedTeam?.name === team.name;
+        // In co-owner mode: only taken teams are valid to pick; non-taken are disabled
+        // In normal mode: taken teams are disabled
+        const isDisabled = coOwnerMode ? !isTaken : isTaken;
         return (
           <button
             key={team.abbr}
             type="button"
-            disabled={isTaken}
-            onClick={() => !isTaken && setSelectedTeam(team)}
+            disabled={isDisabled}
+            onClick={() => !isDisabled && setSelectedTeam(team)}
             className={`
               relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-150
-              ${isTaken
+              ${isDisabled
                 ? 'opacity-40 cursor-not-allowed border-slate-600 bg-slate-800'
                 : isSelected
                   ? `border-amber-500 bg-slate-700 ring-2 ${team.ring} scale-105`
-                  : 'border-slate-600 bg-slate-800 hover:border-slate-400 hover:scale-105 cursor-pointer'
+                  : isTaken && coOwnerMode
+                    ? 'border-teal-500/60 bg-slate-800 hover:border-teal-400 hover:scale-105 cursor-pointer'
+                    : 'border-slate-600 bg-slate-800 hover:border-slate-400 hover:scale-105 cursor-pointer'
               }
             `}
           >
@@ -47,8 +52,11 @@ export default function TeamSelector({ selectedTeam, setSelectedTeam, takenTeams
               {team.abbr.slice(0, 2)}
             </span>
             <span className="text-white text-xs font-medium text-center leading-tight">{team.abbr}</span>
-            {isTaken && (
+            {isTaken && !coOwnerMode && (
               <span className="absolute top-1 right-1 text-[9px] text-slate-400 font-semibold">Taken</span>
+            )}
+            {isTaken && coOwnerMode && (
+              <span className="absolute top-1 right-1 text-[9px] text-teal-400 font-semibold">Co-own</span>
             )}
           </button>
         );

@@ -17,8 +17,10 @@ const teamSchema = new mongoose.Schema({
     acquiredAt: { type: Date, default: Date.now },
   }],
   overseasCount: { type: Number, default: 0 },
-  isConnected:   { type: Boolean, default: true },
-  isEliminated:  { type: Boolean, default: false },
+  isConnected:     { type: Boolean, default: true },
+  isEliminated:    { type: Boolean, default: false },
+  coOwnerName:     { type: String, default: null },
+  coOwnerSocketId: { type: String, default: null },
 }, { timestamps: true });
 
 // Virtual: keep remaining in sync
