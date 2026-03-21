@@ -2,6 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuction } from '../../context/AuctionContext';
 import api from '../../api/axios';
 
+const ROLE_NORMALIZE = {
+  'batsman': 'Batter',
+  'batter': 'Batter',
+  'bowler': 'Bowler',
+  'all-rounder': 'All-rounder',
+  'allrounder': 'All-rounder',
+  'wicket-keeper': 'Wicketkeeper',
+  'wicketkeeper': 'Wicketkeeper',
+};
+
 const ROLE_STYLES = {
   'Batter': 'text-blue-400 bg-blue-500/20',
   'Bowler': 'text-emerald-400 bg-emerald-500/20',
@@ -79,7 +89,7 @@ export default function PlayersModal({ onClose }) {
   const filtered = useMemo(() => {
     return players.filter((p) => {
       if (search && !(p.name ?? '').toLowerCase().includes(search.toLowerCase())) return false;
-      if (roleFilter !== 'All' && p.role !== roleFilter) return false;
+      if (roleFilter !== 'All' && (ROLE_NORMALIZE[p.role?.toLowerCase()] ?? p.role) !== roleFilter) return false;
       if (typeFilter !== 'All' && p.nationality !== typeFilter) return false;
       if (statusFilter !== 'All') {
         const s = getStatus(p._id);
@@ -215,8 +225,8 @@ export default function PlayersModal({ onClose }) {
                     </div>
 
                     <div className="flex flex-wrap gap-1 mb-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${ROLE_STYLES[player.role] ?? 'text-slate-400 bg-slate-700'}`}>
-                        {player.role}
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${ROLE_STYLES[ROLE_NORMALIZE[player.role?.toLowerCase()] ?? player.role] ?? 'text-slate-400 bg-slate-700'}`}>
+                        {ROLE_NORMALIZE[player.role?.toLowerCase()] ?? player.role}
                       </span>
                       <span className={`text-xs px-1.5 py-0.5 rounded ${
                         player.nationality === 'Overseas'
