@@ -4,7 +4,7 @@ const Room = require('../models/Room');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
 const AuctionHistory = require('../models/AuctionHistory');
-const { getNextBidAmount, TIMER_DEFAULTS } = require('../config/constants');
+const { getNextBidAmount, TIMER_DEFAULTS, RTM_DEFAULTS, IPL_TEAM_ABBR, expandTeamHistory } = require('../config/constants');
 const timerManager = require('../socket/timerManager');
 
 // Per-room mutexes to serialize bid handling
@@ -17,6 +17,12 @@ function getMutex(roomCode) {
 // In-memory current auction state per room
 const auctionStates = new Map();
 // shape: { currentPlayer, currentBid: { amount, teamId, teamName }, bids: [], auctionOrder, startedAt }
+
+// In-memory RTM state per room
+const rtmStates = new Map();
+// shape: { player, originalWinnerId, originalWinnerName, soldPrice, auctionOrder, bids, startedAt,
+//          phase: 'window'|'bidding', eligibleTeamIds: [ObjectId], interestedTeamIds: [ObjectId],
+//          currentBid: { amount, teamId, teamName }|null, rtmBids: [], interval, secondsRemaining }
 
 function getAuctionState(roomCode) {
   return auctionStates.get(roomCode);
@@ -40,6 +46,7 @@ async function populateTeamSnapshots(roomId) {
     isConnected: t.isConnected,
     isEliminated: t.isEliminated,
     emergencyUsed: t.emergencyUsed,
+    rtmRemaining: t.rtmRemaining,
     coOwnerName: t.coOwnerName || null,
   }));
 }
@@ -260,19 +267,6 @@ async function finalizeSale(io, room) {
   room.currentPlayerIndex++;
   await room.save();
 
-  // Save history
-  await AuctionHistory.create({
-    roomId: room._id,
-    playerId: currentPlayer._id,
-    outcome: 'sold',
-    soldTo: winningTeamId,
-    soldPrice,
-    basePrice: currentPlayer.basePrice,
-    bids,
-    auctionDuration: Math.round((Date.now() - startedAt) / 1000),
-    auctionOrder,
-  });
-
   const teams = await populateTeamSnapshots(room._id);
 
   io.to(room.roomCode).emit('player-sold', {
@@ -285,13 +279,16 @@ async function finalizeSale(io, room) {
 
   auctionStates.delete(room.roomCode);
 
-  // Auto-advance after delay
-  setTimeout(async () => {
-    const latestRoom = await Room.findById(room._id);
-    if (latestRoom && latestRoom.status === 'active') {
-      await advanceToNextPlayer(io, latestRoom);
-    }
-  }, TIMER_DEFAULTS.postSaleDelay);
+  // Check for RTM eligibility — RTM functions handle advance/history write
+  await tryStartRTM(io, room, {
+    player: currentPlayer,
+    soldPrice,
+    winningTeamId,
+    winningTeamName: currentBid.teamName,
+    bids,
+    auctionOrder,
+    startedAt,
+  });
 }
 
 async function finalizeUnsold(io, room) {
@@ -431,9 +428,312 @@ async function emergencyRelease(io, socket, { roomCode, teamId, playerId }) {
   }
 }
 
+// ─── RTM (Right to Match) ────────────────────────────────────────────────────
+
+function getRTMState(roomCode) {
+  return rtmStates.get(roomCode) || null;
+}
+
+async function tryStartRTM(io, room, { player, soldPrice, winningTeamId, winningTeamName, bids, auctionOrder, startedAt }) {
+  const allTeams = await Team.find({ roomId: room._id });
+
+  // Expand pipe-separated history entries (e.g. 'MI|KKR') and resolve full names → abbrevs
+  const playerTeamAbbrs = expandTeamHistory(player.iplTeamHistory);
+
+  const eligibleTeams = allTeams.filter((t) => {
+    if (t._id.equals(winningTeamId)) return false;
+    // Compare team's abbreviation against expanded player history
+    const teamAbbr = IPL_TEAM_ABBR[t.teamName] || t.teamName;
+    if (!playerTeamAbbrs.includes(teamAbbr)) return false;
+    if (t.rtmRemaining <= 0) return false;
+    if (t.budget.remaining < soldPrice) return false;
+    if (t.squad.length >= room.config.maxSquadSize) return false;
+    if (player.nationality === 'Overseas' && t.overseasCount >= room.config.maxOverseasPlayers) return false;
+    return true;
+  });
+
+  if (eligibleTeams.length === 0) {
+    // No RTM possible — write history and advance normally
+    await AuctionHistory.create({
+      roomId: room._id,
+      playerId: player._id,
+      outcome: 'sold',
+      soldTo: winningTeamId,
+      soldPrice,
+      basePrice: player.basePrice,
+      bids,
+      auctionDuration: Math.round((Date.now() - startedAt) / 1000),
+      auctionOrder,
+    });
+    setTimeout(async () => {
+      const latestRoom = await Room.findById(room._id);
+      if (latestRoom && latestRoom.status === 'active') await advanceToNextPlayer(io, latestRoom);
+    }, TIMER_DEFAULTS.postSaleDelay);
+    return;
+  }
+
+  // RTM window opens
+  const state = {
+    player,
+    originalWinnerId: winningTeamId,
+    originalWinnerName: winningTeamName,
+    soldPrice,
+    auctionOrder,
+    bids,
+    startedAt,
+    phase: 'window',
+    eligibleTeamIds: eligibleTeams.map((t) => t._id),
+    interestedTeamIds: [],
+    currentBid: null,
+    rtmBids: [],
+    interval: null,
+    secondsRemaining: RTM_DEFAULTS.windowDuration,
+  };
+  rtmStates.set(room.roomCode, state);
+
+  io.to(room.roomCode).emit('rtm-available', {
+    player,
+    soldPrice,
+    soldTo: { teamId: winningTeamId, teamName: winningTeamName },
+    eligibleTeamIds: eligibleTeams.map((t) => t._id.toString()),
+    windowDuration: RTM_DEFAULTS.windowDuration,
+  });
+
+  // Start window countdown
+  state.interval = setInterval(async () => {
+    state.secondsRemaining -= 1;
+    io.to(room.roomCode).emit('rtm-window-tick', { secondsRemaining: state.secondsRemaining });
+    if (state.secondsRemaining <= 0) {
+      clearInterval(state.interval);
+      state.interval = null;
+      await _resolveRTMWindow(io, room);
+    }
+  }, 1000);
+}
+
+async function _resolveRTMWindow(io, room) {
+  const state = rtmStates.get(room.roomCode);
+  if (!state || state.phase !== 'window') return;
+
+  if (state.interestedTeamIds.length === 0) {
+    await endRTMNoWinner(io, room);
+    return;
+  }
+
+  if (state.interestedTeamIds.length === 1) {
+    await finalizeRTM(io, room, { winnerId: state.interestedTeamIds[0], finalPrice: state.soldPrice });
+    return;
+  }
+
+  // 2+ interested — start bidding war
+  state.phase = 'bidding';
+  state.secondsRemaining = RTM_DEFAULTS.biddingRoundDuration;
+
+  const interestedTeams = await Team.find({ _id: { $in: state.interestedTeamIds } }).select('teamName color');
+
+  io.to(room.roomCode).emit('rtm-bidding-started', {
+    interestedTeamIds: state.interestedTeamIds.map(String),
+    interestedTeams: interestedTeams.map((t) => ({ teamId: t._id, teamName: t.teamName, color: t.color })),
+    baseBid: state.soldPrice,
+    biddingDuration: RTM_DEFAULTS.biddingRoundDuration,
+  });
+
+  _startRTMBiddingInterval(io, room);
+}
+
+function _startRTMBiddingInterval(io, room) {
+  const state = rtmStates.get(room.roomCode);
+  if (!state) return;
+  if (state.interval) clearInterval(state.interval);
+  state.secondsRemaining = RTM_DEFAULTS.biddingRoundDuration;
+
+  state.interval = setInterval(async () => {
+    state.secondsRemaining -= 1;
+    io.to(room.roomCode).emit('rtm-bid-tick', { secondsRemaining: state.secondsRemaining });
+    if (state.secondsRemaining <= 0) {
+      clearInterval(state.interval);
+      state.interval = null;
+      if (state.currentBid && state.currentBid.teamId) {
+        await finalizeRTM(io, room, { winnerId: state.currentBid.teamId, finalPrice: state.currentBid.amount });
+      } else {
+        // Bidding war with no bids — original winner keeps
+        await endRTMNoWinner(io, room);
+      }
+    }
+  }, 1000);
+}
+
+async function handleRTMInterest(io, socket, { roomCode, teamId }) {
+  const state = rtmStates.get(roomCode);
+  if (!state || state.phase !== 'window') {
+    socket.emit('rtm-rejected', { reason: 'WINDOW_CLOSED', message: 'RTM window is not open' });
+    return;
+  }
+  const isEligible = state.eligibleTeamIds.some((id) => id.toString() === teamId.toString());
+  if (!isEligible) {
+    socket.emit('rtm-rejected', { reason: 'NOT_ELIGIBLE', message: 'Your team is not eligible for RTM on this player' });
+    return;
+  }
+  const alreadyIn = state.interestedTeamIds.some((id) => id.toString() === teamId.toString());
+  if (alreadyIn) return; // idempotent
+
+  const team = await Team.findById(teamId);
+  if (!team) return;
+
+  state.interestedTeamIds.push(team._id);
+
+  io.to(roomCode).emit('rtm-update', {
+    interestedTeamIds: state.interestedTeamIds.map(String),
+    interestedTeam: { teamId: team._id, teamName: team.teamName },
+  });
+}
+
+async function handleRTMBid(io, socket, { roomCode, teamId, amount }) {
+  const mutex = getMutex(roomCode);
+  const release = await mutex.acquire();
+  try {
+    const state = rtmStates.get(roomCode);
+    if (!state || state.phase !== 'bidding') {
+      socket.emit('rtm-rejected', { reason: 'NOT_IN_BIDDING', message: 'RTM bidding is not active' });
+      return;
+    }
+    const isParticipant = state.interestedTeamIds.some((id) => id.toString() === teamId.toString());
+    if (!isParticipant) {
+      socket.emit('rtm-rejected', { reason: 'NOT_PARTICIPATING', message: 'You did not opt into RTM' });
+      return;
+    }
+
+    // Minimum bid: if nobody has bid yet in the war, floor = soldPrice; otherwise next tier
+    const minBid = state.currentBid ? getNextBidAmount(state.currentBid.amount) : state.soldPrice;
+    if (!Number.isInteger(amount) || amount < minBid || amount % 5 !== 0) {
+      socket.emit('rtm-rejected', { reason: 'INVALID_BID', message: `RTM bid must be at least ₹${minBid}L and a multiple of 5L` });
+      return;
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team || team.budget.remaining < amount) {
+      socket.emit('rtm-rejected', { reason: 'INSUFFICIENT_FUNDS', message: 'Insufficient budget for this RTM bid' });
+      return;
+    }
+
+    const room = await Room.findOne({ roomCode });
+    if (!room) return;
+
+    state.currentBid = { amount, teamId: team._id, teamName: team.teamName };
+    state.rtmBids.push({ teamId: team._id, teamName: team.teamName, amount, timestamp: new Date() });
+
+    // Reset bidding timer
+    _startRTMBiddingInterval(io, room);
+
+    io.to(roomCode).emit('rtm-bid-update', {
+      teamId: team._id,
+      teamName: team.teamName,
+      amount,
+      nextBidAmount: getNextBidAmount(amount),
+      secondsRemaining: RTM_DEFAULTS.biddingRoundDuration,
+    });
+  } finally {
+    release();
+  }
+}
+
+async function finalizeRTM(io, room, { winnerId, finalPrice }) {
+  const state = rtmStates.get(room.roomCode);
+  if (!state) return;
+  if (state.interval) { clearInterval(state.interval); state.interval = null; }
+  rtmStates.delete(room.roomCode);
+
+  // Refund original winner
+  const origTeam = await Team.findById(state.originalWinnerId);
+  if (origTeam) {
+    origTeam.squad = origTeam.squad.filter((e) => !e.playerId.equals(state.player._id));
+    if (state.player.nationality === 'Overseas') origTeam.overseasCount = Math.max(0, origTeam.overseasCount - 1);
+    origTeam.budget.spent -= state.soldPrice;
+    await origTeam.save();
+  }
+
+  // Assign to RTM winner
+  const rtmWinner = await Team.findById(winnerId);
+  if (rtmWinner) {
+    rtmWinner.squad.push({ playerId: state.player._id, soldPrice: finalPrice });
+    if (state.player.nationality === 'Overseas') rtmWinner.overseasCount++;
+    rtmWinner.budget.spent += finalPrice;
+    rtmWinner.rtmRemaining = Math.max(0, rtmWinner.rtmRemaining - 1);
+    await rtmWinner.save();
+  }
+
+  // Write definitive AuctionHistory
+  await AuctionHistory.create({
+    roomId: room._id,
+    playerId: state.player._id,
+    outcome: 'sold',
+    soldTo: winnerId,
+    soldPrice: finalPrice,
+    basePrice: state.player.basePrice,
+    bids: [...state.bids, ...state.rtmBids],
+    auctionDuration: Math.round((Date.now() - state.startedAt) / 1000),
+    auctionOrder: state.auctionOrder,
+  });
+
+  const teams = await populateTeamSnapshots(room._id);
+
+  io.to(room.roomCode).emit('rtm-end', {
+    outcome: 'rtm-won',
+    player: state.player,
+    rtmWinner: { teamId: winnerId, teamName: rtmWinner ? rtmWinner.teamName : '' },
+    finalPrice,
+    originalWinner: { teamId: state.originalWinnerId, teamName: state.originalWinnerName },
+    refundAmount: state.soldPrice,
+    teams,
+  });
+
+  setTimeout(async () => {
+    const latestRoom = await Room.findById(room._id);
+    if (latestRoom && latestRoom.status === 'active') await advanceToNextPlayer(io, latestRoom);
+  }, RTM_DEFAULTS.postRtmDelay);
+}
+
+async function endRTMNoWinner(io, room) {
+  const state = rtmStates.get(room.roomCode);
+  if (!state) return;
+  if (state.interval) { clearInterval(state.interval); state.interval = null; }
+  rtmStates.delete(room.roomCode);
+
+  // Original winner keeps player — write AuctionHistory
+  await AuctionHistory.create({
+    roomId: room._id,
+    playerId: state.player._id,
+    outcome: 'sold',
+    soldTo: state.originalWinnerId,
+    soldPrice: state.soldPrice,
+    basePrice: state.player.basePrice,
+    bids: state.bids,
+    auctionDuration: Math.round((Date.now() - state.startedAt) / 1000),
+    auctionOrder: state.auctionOrder,
+  });
+
+  const teams = await populateTeamSnapshots(room._id);
+
+  io.to(room.roomCode).emit('rtm-end', {
+    outcome: 'no-rtm',
+    player: state.player,
+    soldTo: { teamId: state.originalWinnerId, teamName: state.originalWinnerName },
+    soldPrice: state.soldPrice,
+    teams,
+  });
+
+  setTimeout(async () => {
+    const latestRoom = await Room.findById(room._id);
+    if (latestRoom && latestRoom.status === 'active') await advanceToNextPlayer(io, latestRoom);
+  }, RTM_DEFAULTS.postRtmDelay);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = {
   verifyAuctioneerToken,
   getAuctionState,
+  getRTMState,
   startAuction,
   advanceToNextPlayer,
   placeBid,
@@ -442,5 +742,7 @@ module.exports = {
   markUnsold,
   endAuction,
   emergencyRelease,
+  handleRTMInterest,
+  handleRTMBid,
   populateTeamSnapshots,
 };

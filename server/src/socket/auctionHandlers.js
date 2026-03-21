@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const Room = require('../models/Room');
-const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction, emergencyRelease } = require('../services/auctionService');
+const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction, emergencyRelease, handleRTMInterest, handleRTMBid } = require('../services/auctionService');
 const timerManager = require('./timerManager');
 
 function verifyToken(rawToken, hashedToken) {
@@ -115,6 +115,24 @@ module.exports = function registerAuctionHandlers(io, socket) {
       await emergencyRelease(io, socket, { roomCode: roomCode?.toUpperCase(), teamId, playerId });
     } catch (err) {
       console.error('emergency-release error:', err);
+      socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
+    }
+  });
+
+  socket.on('rtm-interest', async ({ roomCode, teamId }) => {
+    try {
+      await handleRTMInterest(io, socket, { roomCode: roomCode?.toUpperCase(), teamId });
+    } catch (err) {
+      console.error('rtm-interest error:', err);
+      socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
+    }
+  });
+
+  socket.on('rtm-bid', async ({ roomCode, teamId, amount }) => {
+    try {
+      await handleRTMBid(io, socket, { roomCode: roomCode?.toUpperCase(), teamId, amount });
+    } catch (err) {
+      console.error('rtm-bid error:', err);
       socket.emit('error', { code: 'SERVER_ERROR', message: err.message });
     }
   });
