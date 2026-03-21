@@ -1,10 +1,31 @@
-import { useState } from 'react';
+import { useState, Component } from 'react';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 import PlayersModal from '../../common/PlayersModal';
 import { useRoom } from '../../../context/RoomContext';
 import { useAuction } from '../../../context/AuctionContext';
+
+class ModalErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+          <div className="bg-slate-800 rounded-xl p-6 text-center">
+            <p className="text-white font-semibold mb-3">Failed to load players</p>
+            <button onClick={() => { this.setState({ hasError: false }); this.props.onClose(); }}
+              className="text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg">
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function AuctionLayout() {
   const { room } = useRoom();
@@ -50,7 +71,11 @@ export default function AuctionLayout() {
         </div>
       </header>
 
-      {showPlayers && <PlayersModal onClose={() => setShowPlayers(false)} />}
+      {showPlayers && (
+        <ModalErrorBoundary onClose={() => setShowPlayers(false)}>
+          <PlayersModal onClose={() => setShowPlayers(false)} />
+        </ModalErrorBoundary>
+      )}
 
       {/* 3-column body */}
       <div className="flex-1 grid min-h-0" style={{ gridTemplateColumns: '22% 52% 26%' }}>

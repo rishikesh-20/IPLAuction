@@ -33,12 +33,18 @@ export default function PlayersModal({ onClose }) {
   const { soldPlayers = [], unsoldPlayers = [] } = useAuction();
 
   useEffect(() => {
-    api.get('/players?limit=500')
+    const controller = new AbortController();
+    api.get('/players?limit=500', { signal: controller.signal })
       .then((res) => {
         setPlayers(res.data.data ?? []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
   }, []);
 
   // Build status lookup maps
@@ -69,7 +75,7 @@ export default function PlayersModal({ onClose }) {
 
   const filtered = useMemo(() => {
     return players.filter((p) => {
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !(p.name ?? '').toLowerCase().includes(search.toLowerCase())) return false;
       if (roleFilter !== 'All' && p.role !== roleFilter) return false;
       if (typeFilter !== 'All' && p.nationality !== typeFilter) return false;
       if (statusFilter !== 'All') {
