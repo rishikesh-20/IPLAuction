@@ -3,6 +3,7 @@ import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 import PlayersModal from '../../common/PlayersModal';
+import TargetedPlayersPanel from '../right/TargetedPlayersPanel';
 import { useRoom } from '../../../context/RoomContext';
 import { useAuction } from '../../../context/AuctionContext';
 import { useTeams } from '../../../context/TeamContext';
@@ -30,10 +31,12 @@ class ModalErrorBoundary extends Component {
 
 export default function AuctionLayout() {
   const { room, isAuctioneer } = useRoom();
-  const { auctionOrder, totalPlayers, soldCount, unsoldPlayers } = useAuction();
+  const { auctionOrder, totalPlayers, soldCount, unsoldPlayers, targetedPlayers, hasTargetedPlayerInQueue } = useAuction();
   const { myTeam } = useTeams();
   const [showPlayers, setShowPlayers] = useState(false);
-  const [showQueue, setShowQueue] = useState(false);
+  const [activeSidebar, setActiveSidebar] = useState(null); // null | 'queue' | 'targeted'
+
+  const toggleSidebar = (name) => setActiveSidebar((prev) => (prev === name ? null : name));
 
   const ownerName = myTeam?.ownerName || sessionStorage.getItem('ownerName') || '';
   const teamName = myTeam?.teamName || (isAuctioneer ? 'Auctioneer' : '');
@@ -82,14 +85,30 @@ export default function AuctionLayout() {
             </div>
           )}
           <button
-            onClick={() => setShowQueue((v) => !v)}
-            className={`text-xs border px-3 py-1.5 rounded-lg transition-colors ${
-              showQueue
+            onClick={() => toggleSidebar('queue')}
+            className={`text-xs border px-3 py-1.5 rounded-lg transition-all ${
+              activeSidebar === 'queue'
                 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                : hasTargetedPlayerInQueue
+                ? 'bg-amber-500/10 border-amber-400/70 text-amber-300 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.35)]'
                 : 'bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-300'
             }`}
           >
             🗂 Queue
+          </button>
+          <button
+            onClick={() => toggleSidebar('targeted')}
+            className={`text-xs border px-3 py-1.5 rounded-lg transition-all ${
+              activeSidebar === 'targeted'
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                : targetedPlayers.length > 0
+                ? 'bg-slate-700 hover:bg-slate-600 border-amber-500/40 text-amber-400'
+                : 'bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-300'
+            }`}
+          >
+            🎯 Targeted{targetedPlayers.length > 0 && (
+              <span className="ml-1 font-semibold text-amber-400">({targetedPlayers.length})</span>
+            )}
           </button>
           <button
             onClick={() => setShowPlayers(true)}
@@ -116,22 +135,24 @@ export default function AuctionLayout() {
           <CenterPanel />
         </div>
 
-        {/* Sliding Queue Sidebar */}
+        {/* Sliding Sidebar */}
         <div className={`absolute top-0 right-0 h-full w-72 bg-slate-900 border-l border-slate-700 overflow-y-auto transition-transform duration-300 ease-in-out z-30 ${
-          showQueue ? 'translate-x-0' : 'translate-x-full'
+          activeSidebar ? 'translate-x-0' : 'translate-x-full'
         }`}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 sticky top-0 bg-slate-900">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Player Queue</h2>
-            <button onClick={() => setShowQueue(false)} className="text-slate-500 hover:text-white text-lg leading-none transition-colors">✕</button>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              {activeSidebar === 'targeted' ? '🎯 Targeted Players' : '🗂 Player Queue'}
+            </h2>
+            <button onClick={() => setActiveSidebar(null)} className="text-slate-500 hover:text-white text-lg leading-none transition-colors">✕</button>
           </div>
           <div className="p-3">
-            <RightPanel />
+            {activeSidebar === 'targeted' ? <TargetedPlayersPanel /> : <RightPanel />}
           </div>
         </div>
 
-        {/* Backdrop when queue open */}
-        {showQueue && (
-          <div className="absolute inset-0 z-20 bg-black/30" onClick={() => setShowQueue(false)} />
+        {/* Backdrop when sidebar open */}
+        {activeSidebar && (
+          <div className="absolute inset-0 z-20 bg-black/30" onClick={() => setActiveSidebar(null)} />
         )}
       </div>
     </div>

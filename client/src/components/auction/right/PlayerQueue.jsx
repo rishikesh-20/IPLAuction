@@ -6,7 +6,7 @@ import SoldUnsoldTabs from './SoldUnsoldTabs';
 const ROLES = ['batsman', 'bowler', 'all-rounder', 'wicket-keeper'];
 
 export default function PlayerQueue() {
-  const { playerQueue } = useAuction();
+  const { playerQueue, isPlayerTargeted } = useAuction();
   const [roleFilter, setRoleFilter] = useState('');
 
   const filtered = roleFilter
@@ -33,7 +33,7 @@ export default function PlayerQueue() {
             <p className="text-slate-600 text-xs text-center py-6">No more players in queue</p>
           )}
           {filtered.map((p, i) => (
-            <PlayerQueueItem key={p._id} player={p} index={i} />
+            <PlayerQueueItem key={p._id} player={p} index={i} isTargeted={isPlayerTargeted(p._id)} />
           ))}
         </div>
       </div>
