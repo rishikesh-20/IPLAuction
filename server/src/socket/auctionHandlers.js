@@ -1,19 +1,13 @@
-const crypto = require('crypto');
 const Room = require('../models/Room');
 const { verifyAuctioneerToken, startAuction, placeBid, markUnsold, advanceToNextPlayer, endAuction, emergencyRelease, handleRTMInterest, handleRTMBid } = require('../services/auctionService');
 const timerManager = require('./timerManager');
-
-function verifyToken(rawToken, hashedToken) {
-  const hashed = crypto.createHash('sha256').update(rawToken).digest('hex');
-  return hashed === hashedToken;
-}
 
 module.exports = function registerAuctionHandlers(io, socket) {
   socket.on('start-auction', async ({ roomCode, auctioneerToken }) => {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
       if (room.status !== 'waiting') return socket.emit('error', { code: 'ALREADY_STARTED', message: 'Auction already started' });
       if (room.teams.length < 1) return socket.emit('error', { code: 'NO_TEAMS', message: 'At least one team must join before starting' });
 
@@ -38,7 +32,7 @@ module.exports = function registerAuctionHandlers(io, socket) {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
       if (room.status !== 'active') return socket.emit('error', { code: 'AUCTION_NOT_ACTIVE', message: 'Auction is not active' });
 
       timerManager.destroyTimer(room.roomCode);
@@ -54,7 +48,7 @@ module.exports = function registerAuctionHandlers(io, socket) {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
       if (room.status !== 'active') return socket.emit('error', { code: 'AUCTION_NOT_ACTIVE', message: 'Auction is not active' });
 
       await markUnsold(io, room);
@@ -68,7 +62,7 @@ module.exports = function registerAuctionHandlers(io, socket) {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
       if (room.status === 'completed') return socket.emit('error', { code: 'ALREADY_COMPLETED', message: 'Auction already completed' });
 
       await endAuction(io, room);
@@ -82,7 +76,7 @@ module.exports = function registerAuctionHandlers(io, socket) {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
 
       timerManager.pauseTimer(room.roomCode);
       room.status = 'paused';
@@ -98,7 +92,7 @@ module.exports = function registerAuctionHandlers(io, socket) {
     try {
       const room = await Room.findOne({ roomCode: roomCode?.toUpperCase() });
       if (!room) return socket.emit('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' });
-      if (!verifyToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
+      if (!verifyAuctioneerToken(auctioneerToken, room.auctioneerToken)) return socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid auctioneer token' });
 
       timerManager.resumeTimer(room.roomCode);
       room.status = 'active';

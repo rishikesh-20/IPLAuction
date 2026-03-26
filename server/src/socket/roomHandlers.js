@@ -1,9 +1,8 @@
-const crypto = require('crypto');
 const Room = require('../models/Room');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
 const AuctionHistory = require('../models/AuctionHistory');
-const { getAuctionState, getRTMState, populateTeamSnapshots } = require('../services/auctionService');
+const { getAuctionState, getRTMState, populateTeamSnapshots, buildQueuePreview } = require('../services/auctionService');
 
 const TEAM_COLORS = [
   '#3b82f6','#ef4444','#f59e0b','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316',
@@ -15,19 +14,7 @@ async function buildRoomState(room, socket, myTeamId) {
   const auctionState = getAuctionState(room.roomCode);
 
   // Player queue preview
-  const queuePlayers = [];
-  let lookahead = room.currentPlayerIndex + (auctionState ? 1 : 0);
-  while (queuePlayers.length < 5 && lookahead < room.playerPool.length) {
-    const pid = room.playerPool[lookahead];
-    const alreadyDone =
-      room.soldPlayerIds.some((id) => id.equals(pid)) ||
-      room.unsoldPlayerIds.some((id) => id.equals(pid));
-    if (!alreadyDone) {
-      const p = await Player.findById(pid).select('name role nationality basePrice category');
-      if (p) queuePlayers.push(p);
-    }
-    lookahead++;
-  }
+  const queuePlayers = await buildQueuePreview(room, room.currentPlayerIndex + (auctionState ? 1 : 0));
 
   const unsoldPlayers = await Player.find({ _id: { $in: room.unsoldPlayerIds } });
   const recentHistory = await AuctionHistory.find({ roomId: room._id })

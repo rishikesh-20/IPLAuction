@@ -49,7 +49,13 @@ export default function TeamBudgetBar({ team, isMyTeam, config }) {
       {/* Expanded squad */}
       {expanded && team.squad?.length > 0 && (
         <div className="mt-3 pt-3 border-t border-slate-700 space-y-1">
-          {team.squad.map((s, i) => (
+          {(() => {
+            const ROLE_ORDER = { batsman: 0, bowler: 1, 'all-rounder': 2, 'wicket-keeper': 3 };
+            const sortedSquad = [...team.squad].sort(
+              (a, b) => (ROLE_ORDER[a.playerId?.role] ?? 99) - (ROLE_ORDER[b.playerId?.role] ?? 99)
+            );
+            return sortedSquad;
+          })().map((s, i) => (
             <div key={i} className="flex justify-between items-center text-xs">
               <div className="flex items-center gap-1.5 min-w-0">
                 {s.playerId && <RoleBadge role={s.playerId.role} size="xs" />}

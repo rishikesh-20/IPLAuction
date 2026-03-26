@@ -17,4 +17,6 @@ const auctionHistorySchema = new mongoose.Schema({
   auctionOrder:    { type: Number },
 }, { timestamps: true });
 
+auctionHistorySchema.index({ roomId: 1, auctionOrder: 1 });
+
 module.exports = mongoose.model('AuctionHistory', auctionHistorySchema);

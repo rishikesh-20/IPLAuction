@@ -6,3 +6,4 @@ export const updateRoomConfig = (roomCode, data) => api.patch(`/rooms/${roomCode
 export const getRoomHistory = (roomCode) => api.get(`/rooms/${roomCode}/history`);
 export const getRoomStandings = (roomCode) => api.get(`/rooms/${roomCode}/standings`);
 export const getRoomTeams = (roomCode) => api.get(`/rooms/${roomCode}/teams`);
+export const setTeamPlaying11 = (teamId, data) => api.patch(`/teams/${teamId}/playing11`, data);

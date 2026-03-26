@@ -226,8 +226,10 @@ export function AuctionProvider({ children }) {
 
     socket.on('room-state', onRoomState);
     socket.on('team-joined', onTeamJoined);
-    socket.on('team-disconnected', ({ teamId }) => onTeamConnChange({ teamId, isConnected: false }));
-    socket.on('team-reconnected', ({ teamId }) => onTeamConnChange({ teamId, isConnected: true }));
+    const onTeamDisconnected = ({ teamId }) => onTeamConnChange({ teamId, isConnected: false });
+    const onTeamReconnected  = ({ teamId }) => onTeamConnChange({ teamId, isConnected: true });
+    socket.on('team-disconnected', onTeamDisconnected);
+    socket.on('team-reconnected',  onTeamReconnected);
     socket.on('auction-started', onAuctionStarted);
     socket.on('player-queued', onPlayerQueued);
     socket.on('bid-update', onBidUpdate);
@@ -254,8 +256,8 @@ export function AuctionProvider({ children }) {
     return () => {
       socket.off('room-state', onRoomState);
       socket.off('team-joined', onTeamJoined);
-      socket.off('team-disconnected');
-      socket.off('team-reconnected');
+      socket.off('team-disconnected', onTeamDisconnected);
+      socket.off('team-reconnected',  onTeamReconnected);
       socket.off('auction-started', onAuctionStarted);
       socket.off('player-queued', onPlayerQueued);
       socket.off('bid-update', onBidUpdate);

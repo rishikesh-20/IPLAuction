@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 const TeamContext = createContext(null);
 
@@ -6,7 +6,7 @@ export function TeamProvider({ children }) {
   const [teams, setTeams] = useState([]);
   const [myTeamId, setMyTeamId] = useState(null);
 
-  const myTeam = teams.find((t) => t._id === myTeamId) || null;
+  const myTeam = useMemo(() => teams.find((t) => t._id === myTeamId) || null, [teams, myTeamId]);
 
   const setAllTeams = useCallback((newTeams) => setTeams(newTeams), []);
 
