@@ -1,7 +1,36 @@
 import { RoleBadge, CategoryBadge, NationalityBadge } from '../../common/Badge';
+import { useTeams } from '../../../context/TeamContext';
+
+// Mirrors server-side IPL_TEAM_ABBR mapping
+const IPL_TEAM_ABBR = {
+  'Mumbai Indians':              'MI',
+  'Chennai Super Kings':         'CSK',
+  'Royal Challengers Bangalore': 'RCB',
+  'Kolkata Knight Riders':       'KKR',
+  'Delhi Capitals':              'DC',
+  'Sunrisers Hyderabad':         'SRH',
+  'Rajasthan Royals':            'RR',
+  'Punjab Kings':                'PBKS',
+  'Gujarat Titans':              'GT',
+  'Lucknow Super Giants':        'LSG',
+};
+
+function expandTeamHistory(iplTeamHistory) {
+  return (iplTeamHistory || []).flatMap((e) => e.split('|').map((s) => s.trim()).filter(Boolean));
+}
 
 export default function PlayerCard({ player }) {
+  const { teams } = useTeams();
   if (!player) return null;
+
+  const expandedHistory = expandTeamHistory(player.iplTeamHistory);
+
+  // For each previous team abbreviation, find if a room team matches and has RTM left
+  const rtmEligibleMap = {}; // abbr → room team (or null)
+  expandedHistory.forEach((abbr) => {
+    const match = teams.find((t) => (IPL_TEAM_ABBR[t.teamName] || t.teamName) === abbr && (t.rtmRemaining ?? 0) > 0);
+    rtmEligibleMap[abbr] = match || null;
+  });
 
   return (
     <div className="card p-5 text-center border-amber-500/20 relative overflow-hidden">
@@ -47,6 +76,36 @@ export default function PlayerCard({ player }) {
               <Stat label="SR" value={player.stats.strikeRate} />
             </>
           )}
+        </div>
+      )}
+
+      {/* Previous IPL teams + RTM availability */}
+      {expandedHistory.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-700">
+          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">🔁 Previous Teams & RTM</p>
+          <div className="flex flex-wrap gap-1.5 justify-center">
+            {expandedHistory.map((abbr, i) => {
+              const roomTeam = rtmEligibleMap[abbr];
+              return roomTeam ? (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/50 rounded-lg px-2.5 py-1"
+                  title={`${roomTeam.teamName} has RTM — ${roomTeam.rtmRemaining} left`}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: roomTeam.color }} />
+                  <span className="text-xs text-amber-300 font-bold">{abbr}</span>
+                  <span className="text-xs text-amber-500">RTM ✓</span>
+                </div>
+              ) : (
+                <span
+                  key={i}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-700/50 border border-slate-700 text-slate-500"
+                >
+                  {abbr}
+                </span>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
