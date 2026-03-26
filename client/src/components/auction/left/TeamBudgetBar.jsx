@@ -43,7 +43,10 @@ export default function TeamBudgetBar({ team, isMyTeam, config }) {
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-amber-400 font-bold">{formatLakhs(remaining)}</span>
-        <span className="text-slate-500">{team.squad?.length ?? 0}/{config?.maxSquadSize ?? 25} players</span>
+        <div className="flex items-center gap-2 text-slate-500">
+          <span>{team.squad?.length ?? 0}/{config?.maxSquadSize ?? 25} players</span>
+          <span>✈️ {Math.max(0, (config?.maxOverseasPlayers ?? 8) - (team.overseasCount ?? 0))} left</span>
+        </div>
       </div>
 
       {/* Expanded squad */}
@@ -60,6 +63,7 @@ export default function TeamBudgetBar({ team, isMyTeam, config }) {
               <div className="flex items-center gap-1.5 min-w-0">
                 {s.playerId && <RoleBadge role={s.playerId.role} size="xs" />}
                 <span className="text-slate-300 truncate">{s.playerId?.name ?? 'Unknown'}</span>
+                {s.playerId?.nationality === 'Overseas' && <span className="shrink-0">✈️</span>}
               </div>
               <span className="text-slate-500 shrink-0">{formatLakhs(s.soldPrice)}</span>
             </div>
