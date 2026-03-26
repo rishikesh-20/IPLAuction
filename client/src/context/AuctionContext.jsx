@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import socket from '../socket/socket';
 import { useRoom } from './RoomContext';
 import { useTeams } from './TeamContext';
@@ -28,6 +28,10 @@ export function AuctionProvider({ children }) {
   // RTM state
   const [rtmPhase, setRtmPhase] = useState(null); // null | 'window' | 'bidding' | 'ended'
   const [rtmInfo, setRtmInfo] = useState(null);
+
+  // Targeted players (client-only, ephemeral)
+  const [targetedPlayers, setTargetedPlayers] = useState([]);
+  const [customAmounts, setCustomAmountsState] = useState({}); // { [playerId]: number }
 
   const toastIdRef = useRef(0);
 
@@ -330,6 +334,27 @@ export function AuctionProvider({ children }) {
     socket.emit('rtm-interest', { roomCode: room.roomCode, teamId });
   }, [room]);
 
+  const setCustomAmount = useCallback((playerId, value) => {
+    setCustomAmountsState((prev) => ({ ...prev, [playerId?.toString()]: value }));
+  }, []);
+
+  const toggleTargetedPlayer = useCallback((player) => {
+    setTargetedPlayers((prev) => {
+      const exists = prev.some((p) => p._id?.toString() === player._id?.toString());
+      if (exists) return prev.filter((p) => p._id?.toString() !== player._id?.toString());
+      return [...prev, player];
+    });
+  }, []);
+
+  const isPlayerTargeted = useCallback((playerId) => {
+    return targetedPlayers.some((p) => p._id?.toString() === playerId?.toString());
+  }, [targetedPlayers]);
+
+  const hasTargetedPlayerInQueue = useMemo(() => {
+    const targetedIds = new Set(targetedPlayers.map((p) => p._id?.toString()));
+    return playerQueue.some((p) => targetedIds.has(p._id?.toString()));
+  }, [targetedPlayers, playerQueue]);
+
   const emitRtmBid = useCallback((amount) => {
     if (!room) return;
     const teamId = sessionStorage.getItem('teamId');
@@ -345,6 +370,8 @@ export function AuctionProvider({ children }) {
       toasts, addToast, removeToast,
       emitStartAuction, emitNextPlayer, emitMarkUnsold, emitPlaceBid, emitPause, emitResume, emitEndAuction, emitEmergencyRelease,
       rtmPhase, rtmInfo, emitRtmInterest, emitRtmBid,
+      targetedPlayers, toggleTargetedPlayer, isPlayerTargeted, hasTargetedPlayerInQueue,
+      customAmounts, setCustomAmount,
     }}>
       {children}
     </AuctionContext.Provider>

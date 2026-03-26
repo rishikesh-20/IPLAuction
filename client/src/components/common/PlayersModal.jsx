@@ -40,7 +40,7 @@ export default function PlayersModal({ onClose }) {
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
-  const { soldPlayers = [], unsoldPlayers = [] } = useAuction();
+  const { soldPlayers = [], unsoldPlayers = [], toggleTargetedPlayer, isPlayerTargeted } = useAuction();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -211,17 +211,32 @@ export default function PlayersModal({ onClose }) {
                         ? 'border-emerald-700 opacity-70'
                         : status === 'unsold'
                         ? 'border-red-800 opacity-60'
+                        : isPlayerTargeted(player._id)
+                        ? 'border-amber-500/50 hover:border-amber-400'
                         : 'border-slate-700 hover:border-slate-500'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <span className="text-white font-semibold text-sm leading-tight">{player.name}</span>
-                      {status === 'sold' && (
-                        <span className="shrink-0 text-xs bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded">SOLD</span>
-                      )}
-                      {status === 'unsold' && (
-                        <span className="shrink-0 text-xs bg-red-500/20 text-red-400 font-bold px-1.5 py-0.5 rounded">UNSOLD</span>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => toggleTargetedPlayer(player)}
+                          title={isPlayerTargeted(player._id) ? 'Remove target' : 'Target this player'}
+                          className={`text-base leading-none transition-colors ${
+                            isPlayerTargeted(player._id)
+                              ? 'text-amber-400 hover:text-amber-300'
+                              : 'text-slate-600 hover:text-amber-400'
+                          }`}
+                        >
+                          {isPlayerTargeted(player._id) ? '★' : '☆'}
+                        </button>
+                        {status === 'sold' && (
+                          <span className="text-xs bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded">SOLD</span>
+                        )}
+                        {status === 'unsold' && (
+                          <span className="text-xs bg-red-500/20 text-red-400 font-bold px-1.5 py-0.5 rounded">UNSOLD</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-1 mb-2">

@@ -7,7 +7,7 @@ import { formatLakhs } from '../../../utils/formatCurrency';
 import Button from '../../common/Button';
 
 export default function BidButton() {
-  const { currentBid, currentPlayer, emitPlaceBid, auctionPhase } = useAuction();
+  const { currentBid, currentPlayer, emitPlaceBid, auctionPhase, customAmounts, isPlayerTargeted } = useAuction();
   const { myTeam } = useTeams();
   const { room } = useRoom();
 
@@ -47,6 +47,14 @@ export default function BidButton() {
     parsedAmount >= minBidAmount &&
     parsedAmount % 5 === 0;
   const canBid = !disabledReason && bidAmountValid && myTeam?.budget?.remaining >= parsedAmount;
+
+  // Max bid warning
+  const playerId = currentPlayer?._id?.toString();
+  const maxBidRaw = customAmounts?.[playerId];
+  const maxBid = maxBidRaw !== '' && maxBidRaw !== undefined ? parseInt(maxBidRaw, 10) : null;
+  const isTargeted = isPlayerTargeted(playerId);
+  const currentBidAmt = currentBid?.amount ?? currentPlayer?.basePrice ?? 0;
+  const overMaxWarning = isTargeted && maxBid && !isNaN(maxBid) && currentBidAmt > maxBid;
 
   const handleBid = () => {
     if (!canBid || !myTeam?._id) return;
@@ -120,6 +128,17 @@ export default function BidButton() {
             >+</button>
           </div>
           <span className="text-slate-500 text-xs shrink-0">L</span>
+        </div>
+      )}
+
+      {/* Max bid warning */}
+      {overMaxWarning && (
+        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          <span className="text-red-400 text-base shrink-0">⚠️</span>
+          <p className="text-red-400 text-xs leading-tight">
+            Current bid <span className="font-bold">{formatLakhs(currentBidAmt)}</span> exceeds your max of{' '}
+            <span className="font-bold">{formatLakhs(maxBid)}</span>
+          </p>
         </div>
       )}
 
