@@ -1,9 +1,15 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import CreateRoomForm from '../components/landing/CreateRoomForm';
 import JoinRoomForm from '../components/landing/JoinRoomForm';
 
 export default function LandingPage() {
-  const [tab, setTab] = useState('create');
+  const [searchParams] = useSearchParams();
+  const prefilledRoom = searchParams.get('room') || '';
+  const prefilledError = searchParams.get('error') === 'name'
+    ? 'The name you entered does not match the team owner. Please enter your original name.'
+    : '';
+  const [tab, setTab] = useState(prefilledRoom ? 'join' : 'create');
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -33,7 +39,7 @@ export default function LandingPage() {
             </button>
           </div>
 
-          {tab === 'create' ? <CreateRoomForm /> : <JoinRoomForm />}
+          {tab === 'create' ? <CreateRoomForm /> : <JoinRoomForm prefilledRoom={prefilledRoom} prefilledError={prefilledError} />}
         </div>
 
         <p className="text-center text-slate-600 text-xs mt-4">

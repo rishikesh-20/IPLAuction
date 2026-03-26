@@ -28,7 +28,7 @@ export default function AuctionPage() {
     const coOwner = sessionStorage.getItem('coOwner') === 'true';
 
     if (!storedCode || storedCode !== roomCode) {
-      navigate('/');
+      navigate(`/?room=${roomCode}`);
       return;
     }
 
@@ -65,6 +65,8 @@ export default function AuctionPage() {
     const onError = (err) => {
       if (err.code === 'ROOM_NOT_FOUND' || err.code === 'SESSION_EXPIRED') {
         navigate('/');
+      } else if (err.code === 'NAME_MISMATCH') {
+        navigate(`/?room=${roomCode}&error=name`);
       } else if (ERROR_TOASTS[err.code]) {
         addToast(ERROR_TOASTS[err.code], 'error');
       } else {

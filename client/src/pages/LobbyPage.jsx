@@ -33,7 +33,7 @@ export default function LobbyPage() {
     const coOwner = sessionStorage.getItem('coOwner') === 'true';
 
     if (!storedCode || storedCode !== roomCode) {
-      navigate('/');
+      navigate(`/?room=${roomCode}`);
       return;
     }
 
@@ -71,6 +71,8 @@ export default function LobbyPage() {
       console.error('Socket error:', err);
       if (err.code === 'ROOM_NOT_FOUND' || err.code === 'AUCTION_STARTED' || err.code === 'SESSION_EXPIRED') {
         navigate('/');
+      } else if (err.code === 'NAME_MISMATCH') {
+        navigate(`/?room=${roomCode}&error=name`);
       } else if (err.code === 'CO_OWNER_EXISTS') {
         setSocketError('This team already has a co-owner. Please go back and choose a different team.');
       } else {

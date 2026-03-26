@@ -1,28 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getRoom, getRoomTeams } from '../../api/rooms';
 import Button from '../common/Button';
 import TeamSelector from './TeamSelector';
 
-export default function JoinRoomForm() {
+export default function JoinRoomForm({ prefilledRoom = '', prefilledError = '' }) {
   const navigate = useNavigate();
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(prefilledRoom);
   const [ownerName, setOwnerName] = useState('');
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [takenTeams, setTakenTeams] = useState([]);
   const [roomFound, setRoomFound] = useState(false);
+  const [roomStatus, setRoomStatus] = useState('waiting');
   const [coOwnerMode, setCoOwnerMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [nameMismatchError] = useState(prefilledError);
 
   const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50';
   const labelCls = 'block text-xs font-medium text-slate-400 mb-1';
 
-  const handleFindRoom = async (e) => {
-    e.preventDefault();
-    const code = roomCode.trim().toUpperCase();
-    if (!code) return;
+  // Auto-lookup when a room code is pre-filled (e.g. redirected from lobby/auction)
+  useEffect(() => {
+    if (prefilledRoom) {
+      lookupRoom(prefilledRoom);
+    }
+  }, []);
+
+  const lookupRoom = async (code) => {
     setError('');
     setChecking(true);
     setRoomFound(false);
@@ -31,20 +37,23 @@ export default function JoinRoomForm() {
     try {
       const res = await getRoom(code);
       const room = res.data.data;
-      if (room.status !== 'waiting') {
-        setError('This auction has already started');
-        return;
-      }
-      // Fetch existing teams to mark as taken
       const teamsRes = await getRoomTeams(code);
       const existingNames = (teamsRes.data.data || []).map((t) => t.teamName);
       setTakenTeams(existingNames);
+      setRoomStatus(room.status);
       setRoomFound(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Room not found');
     } finally {
       setChecking(false);
     }
+  };
+
+  const handleFindRoom = async (e) => {
+    e.preventDefault();
+    const code = roomCode.trim().toUpperCase();
+    if (!code) return;
+    await lookupRoom(code);
   };
 
   const handleJoin = async (e) => {
@@ -65,12 +74,15 @@ export default function JoinRoomForm() {
     setLoading(true);
     try {
       const code = roomCode.trim().toUpperCase();
-      // Re-validate room is still waiting
       const res = await getRoom(code);
-      if (res.data.data.status !== 'waiting') {
-        setError('This auction has already started');
+      const currentStatus = res.data.data.status;
+
+      // Block only if auction started AND the team doesn't already exist (truly new join)
+      if (currentStatus !== 'waiting' && !takenTeams.includes(selectedTeam.name)) {
+        setError('This auction has already started and that team slot is not taken. You can only rejoin an existing team.');
         return;
       }
+
       sessionStorage.setItem('roomCode', code);
       sessionStorage.setItem('isAuctioneer', 'false');
       sessionStorage.setItem('teamName', selectedTeam.name);
@@ -81,7 +93,11 @@ export default function JoinRoomForm() {
       } else {
         sessionStorage.removeItem('coOwner');
       }
-      navigate(`/lobby/${code}`);
+
+      const dest = currentStatus === 'active' ? 'auction'
+                 : currentStatus === 'completed' ? 'summary'
+                 : 'lobby';
+      navigate(`/${dest}/${code}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Room not found');
     } finally {
@@ -89,8 +105,15 @@ export default function JoinRoomForm() {
     }
   };
 
+  const isRejoinMode = roomStatus !== 'waiting';
+
   return (
     <div className="space-y-4">
+      {nameMismatchError && (
+        <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          {nameMismatchError}
+        </p>
+      )}
       {/* Step 1: Room code */}
       <form onSubmit={handleFindRoom} className="space-y-3">
         <div>
@@ -112,6 +135,11 @@ export default function JoinRoomForm() {
       {/* Step 2: Pick team + name */}
       {roomFound && (
         <form onSubmit={handleJoin} className="space-y-4">
+          {isRejoinMode && (
+            <p className="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              Auction is in progress — select your team and enter your name to rejoin.
+            </p>
+          )}
           <div>
             <label className={labelCls}>Select Your Team</label>
             <TeamSelector
@@ -119,8 +147,9 @@ export default function JoinRoomForm() {
               setSelectedTeam={setSelectedTeam}
               takenTeams={takenTeams}
               coOwnerMode={coOwnerMode}
+              rejoinMode={isRejoinMode}
             />
-            {takenTeams.length > 0 && (
+            {takenTeams.length > 0 && !isRejoinMode && (
               <label className="flex items-center gap-2 mt-2 text-sm text-slate-400 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -144,7 +173,7 @@ export default function JoinRoomForm() {
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <Button type="submit" disabled={loading} variant="secondary" size="lg" className="w-full">
-            {loading ? 'Joining...' : 'Join Room'}
+            {loading ? 'Joining...' : isRejoinMode ? 'Rejoin Room' : 'Join Room'}
           </Button>
         </form>
       )}
