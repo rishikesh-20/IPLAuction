@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuction } from '../../context/AuctionContext';
 import { useTeams } from '../../context/TeamContext';
 import { getNextBidAmount } from '../../utils/bidTiers';
-
-function formatPrice(lakhs) {
-  if (!lakhs && lakhs !== 0) return '—';
-  if (lakhs >= 100) return `₹${(lakhs / 100).toFixed(lakhs % 100 === 0 ? 0 : 2)} Cr`;
-  return `₹${lakhs}L`;
-}
+import { formatLakhs as formatPrice } from '../../utils/formatCurrency';
 
 // ─── Window Phase ─────────────────────────────────────────────────────────────
 

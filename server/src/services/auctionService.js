@@ -4,7 +4,7 @@ const Room = require('../models/Room');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
 const AuctionHistory = require('../models/AuctionHistory');
-const { getNextBidAmount, TIMER_DEFAULTS, RTM_DEFAULTS, IPL_TEAM_ABBR, expandTeamHistory } = require('../config/constants');
+const { getBidIncrement, getNextBidAmount, TIMER_DEFAULTS, RTM_DEFAULTS, IPL_TEAM_ABBR, expandTeamHistory } = require('../config/constants');
 const timerManager = require('../socket/timerManager');
 
 // Per-room mutexes to serialize bid handling
@@ -34,7 +34,8 @@ function verifyAuctioneerToken(rawToken, hashedToken) {
 }
 
 async function populateTeamSnapshots(roomId) {
-  const teams = await Team.find({ roomId }).populate('squad.playerId');
+  const teams = await Team.find({ roomId })
+    .populate('squad.playerId', 'name role nationality basePrice category');
   return teams.map((t) => ({
     _id: t._id,
     teamName: t.teamName,
@@ -120,17 +121,7 @@ async function advanceToNextPlayer(io, room) {
   });
 
   // Build queue preview (next 5)
-  const queuePlayers = [];
-  let lookahead = room.currentPlayerIndex + 1;
-  while (queuePlayers.length < 5 && lookahead < room.playerPool.length) {
-    const pid = room.playerPool[lookahead];
-    const alreadyDone = room.soldPlayerIds.some((id) => id.equals(pid)) || room.unsoldPlayerIds.some((id) => id.equals(pid));
-    if (!alreadyDone) {
-      const p = await Player.findById(pid).select('name role nationality basePrice category');
-      if (p) queuePlayers.push(p);
-    }
-    lookahead++;
-  }
+  const queuePlayers = await buildQueuePreview(room, room.currentPlayerIndex + 1);
 
   io.to(room.roomCode).emit('player-queued', {
     currentPlayer: player,
@@ -160,9 +151,26 @@ async function advanceToNextPlayer(io, room) {
   });
 }
 
+// Shared helper: build queue preview of next `count` unprocessed players from startIndex.
+// Collects candidate IDs first, then fetches them in a single batched query.
+async function buildQueuePreview(room, startIndex, count = 5) {
+  const candidateIds = [];
+  let i = startIndex;
+  while (candidateIds.length < count && i < room.playerPool.length) {
+    const pid = room.playerPool[i++];
+    const done = room.soldPlayerIds.some((id) => id.equals(pid)) ||
+                 room.unsoldPlayerIds.some((id) => id.equals(pid));
+    if (!done) candidateIds.push(pid);
+  }
+  if (!candidateIds.length) return [];
+  const fetched = await Player.find({ _id: { $in: candidateIds } })
+    .select('name role nationality basePrice category');
+  // Preserve pool order
+  return candidateIds.map((id) => fetched.find((p) => p._id.equals(id))).filter(Boolean);
+}
+
 // Bid tier adjustment to set initial "currentBid" so first bid = basePrice
 function getBidTierDecrement(basePrice) {
-  const { getBidIncrement } = require('../config/constants');
   return getBidIncrement(basePrice - 1) || 5;
 }
 
@@ -387,34 +395,12 @@ async function emergencyRelease(io, socket, { roomCode, teamId, playerId }) {
     room.playerPool.push(playerId);
     await room.save();
 
-    // Build updated team snapshot
-    const populatedTeam = await Team.findById(team._id).populate('squad.playerId');
-    const updatedTeam = {
-      _id: populatedTeam._id,
-      teamName: populatedTeam.teamName,
-      ownerName: populatedTeam.ownerName,
-      color: populatedTeam.color,
-      budget: populatedTeam.budget,
-      squad: populatedTeam.squad,
-      overseasCount: populatedTeam.overseasCount,
-      isConnected: populatedTeam.isConnected,
-      isEliminated: populatedTeam.isEliminated,
-      emergencyUsed: populatedTeam.emergencyUsed,
-      coOwnerName: populatedTeam.coOwnerName || null,
-    };
+    // Build updated team snapshot (reuse existing helper)
+    const allSnaps = await populateTeamSnapshots(room._id);
+    const updatedTeam = allSnaps.find((t) => t._id.toString() === team._id.toString());
 
     // Build updated queue preview (next 5 after current index)
-    const queuePlayers = [];
-    let lookahead = room.currentPlayerIndex + 1;
-    while (queuePlayers.length < 5 && lookahead < room.playerPool.length) {
-      const pid = room.playerPool[lookahead];
-      const alreadyDone = room.soldPlayerIds.some((id) => id.equals(pid)) || room.unsoldPlayerIds.some((id) => id.equals(pid));
-      if (!alreadyDone) {
-        const p = await Player.findById(pid).select('name role nationality basePrice category');
-        if (p) queuePlayers.push(p);
-      }
-      lookahead++;
-    }
+    const queuePlayers = await buildQueuePreview(room, room.currentPlayerIndex + 1);
 
     io.to(roomCode).emit('emergency-release', {
       teamId: team._id,
@@ -745,4 +731,5 @@ module.exports = {
   handleRTMInterest,
   handleRTMBid,
   populateTeamSnapshots,
+  buildQueuePreview,
 };

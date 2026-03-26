@@ -16,6 +16,10 @@ const teamSchema = new mongoose.Schema({
     soldPrice:  { type: Number },
     acquiredAt: { type: Date, default: Date.now },
   }],
+  playing11:       [{ type: mongoose.Schema.Types.ObjectId, ref: 'Player' }],
+  captainId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Player', default: null },
+  viceCaptainId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Player', default: null },
+  impactPlayerId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Player', default: null },
   overseasCount: { type: Number, default: 0 },
   isConnected:     { type: Boolean, default: true },
   isEliminated:    { type: Boolean, default: false },
@@ -24,6 +28,10 @@ const teamSchema = new mongoose.Schema({
   coOwnerName:     { type: String, default: null },
   coOwnerSocketId: { type: String, default: null },
 }, { timestamps: true });
+
+teamSchema.index({ roomId: 1 });
+teamSchema.index({ socketId: 1 });
+teamSchema.index({ coOwnerSocketId: 1 });
 
 // Virtual: keep remaining in sync
 teamSchema.pre('save', function (next) {

@@ -12,6 +12,8 @@ export default function SummaryPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const myTeamId = sessionStorage.getItem('teamId');
+  const isAuctioneer = sessionStorage.getItem('isAuctioneer') === 'true';
 
   useEffect(() => {
     getRoomStandings(roomCode)
@@ -65,7 +67,7 @@ export default function SummaryPage() {
 
         {/* Standings */}
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Final Squads</h2>
-        <FinalStandings standings={data?.teams} />
+        <FinalStandings standings={data?.teams} myTeamId={myTeamId} isAuctioneer={isAuctioneer} />
 
         {/* Unsold */}
         {data?.unsoldPlayers?.length > 0 && (

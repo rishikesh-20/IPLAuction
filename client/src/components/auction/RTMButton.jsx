@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useAuction } from '../../context/AuctionContext';
 import { useTeams } from '../../context/TeamContext';
 import { IPL_TEAMS } from '../landing/TeamSelector';
@@ -85,7 +86,11 @@ export default function RTMButton() {
   // ── Persistent indicator: visible between players and at idle ─────────────
   const rtmLeft = myTeam.rtmRemaining ?? 0;
   const teamAbbr = IPL_TEAMS.find((t) => t.name === myTeam.teamName)?.abbr || myTeam.teamName;
-  const expandedHistory = expandHistory(currentPlayer?.iplTeamHistory);
+  const expandedHistory = useMemo(
+    () => expandHistory(currentPlayer?.iplTeamHistory),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentPlayer?.iplTeamHistory]
+  );
   const hasHistory = expandedHistory.includes(teamAbbr);
   const isEligibleNow = hasHistory && rtmLeft > 0;
 

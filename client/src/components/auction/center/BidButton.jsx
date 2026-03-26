@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuction } from '../../../context/AuctionContext';
 import { useTeams } from '../../../context/TeamContext';
 import { useRoom } from '../../../context/RoomContext';
@@ -57,12 +57,15 @@ export default function BidButton() {
     setInputText(e.target.value);
   };
 
-  const quickAmounts = [];
-  let cursor = minBidAmount;
-  for (let i = 0; i < 3; i++) {
-    quickAmounts.push(cursor);
-    cursor = getNextBidAmount(cursor);
-  }
+  const quickAmounts = useMemo(() => {
+    const amounts = [];
+    let cursor = minBidAmount;
+    for (let i = 0; i < 3; i++) {
+      amounts.push(cursor);
+      cursor = getNextBidAmount(cursor);
+    }
+    return amounts;
+  }, [minBidAmount]);
 
   return (
     <div className="space-y-2">

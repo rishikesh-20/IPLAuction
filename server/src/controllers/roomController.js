@@ -44,13 +44,25 @@ exports.createRoom = async (req, res, next) => {
     const rawToken = uuidv4();
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-    // Player pool
+    // Player pool — grouped by basePrice descending, shuffled within each price tier
+    function groupShuffleByPrice(players) {
+      const groups = new Map();
+      for (const p of players) {
+        const price = p.basePrice;
+        if (!groups.has(price)) groups.set(price, []);
+        groups.get(price).push(p._id);
+      }
+      const sortedPrices = [...groups.keys()].sort((a, b) => b - a);
+      return sortedPrices.flatMap((price) => shuffle(groups.get(price)));
+    }
+
     let playerPool;
     if (playerPoolIds && playerPoolIds.length > 0) {
-      playerPool = shuffle(playerPoolIds);
+      const players = await Player.find({ _id: { $in: playerPoolIds }, isActive: true }).select('_id basePrice');
+      playerPool = groupShuffleByPrice(players);
     } else {
-      const allPlayers = await Player.find({ isActive: true }).select('_id');
-      playerPool = shuffle(allPlayers.map((p) => p._id));
+      const allPlayers = await Player.find({ isActive: true }).select('_id basePrice');
+      playerPool = groupShuffleByPrice(allPlayers);
     }
 
     const startingBudget = config.startingBudget ?? 9000;

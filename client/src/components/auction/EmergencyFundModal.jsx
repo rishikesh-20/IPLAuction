@@ -1,5 +1,6 @@
 import { useTeams } from '../../context/TeamContext';
 import { useAuction } from '../../context/AuctionContext';
+import { formatLakhs as formatPrice } from '../../utils/formatCurrency';
 
 const ROLE_STYLES = {
   'batsman': 'text-blue-400 bg-blue-500/20',
@@ -21,11 +22,6 @@ const ROLE_LABELS = {
   'wicketkeeper': 'Wicketkeeper',
 };
 
-function formatPrice(lakhs) {
-  if (!lakhs) return '—';
-  if (lakhs >= 100) return `₹${(lakhs / 100).toFixed(lakhs % 100 === 0 ? 0 : 2)} Cr`;
-  return `₹${lakhs}L`;
-}
 
 export default function EmergencyFundModal({ onClose }) {
   const { myTeam } = useTeams();
