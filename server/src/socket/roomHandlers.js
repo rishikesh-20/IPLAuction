@@ -141,6 +141,13 @@ module.exports = function registerRoomHandlers(io, socket) {
         // Check if a team with the same name already exists (reconnect without teamId race condition)
         const existingTeam = await Team.findOne({ roomId: room._id, teamName });
         if (existingTeam) {
+          // Verify the owner name matches to prevent impersonation
+          if (existingTeam.ownerName !== ownerName) {
+            return socket.emit('error', {
+              code: 'NAME_MISMATCH',
+              message: 'The name you entered does not match the team owner. Please enter your original name.',
+            });
+          }
           existingTeam.socketId = socket.id;
           existingTeam.isConnected = true;
           await existingTeam.save();
